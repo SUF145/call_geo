@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/geo_tracking_service.dart';
+import 'location_history_screen.dart';
 
 class GeoTrackingScreen extends StatefulWidget {
   const GeoTrackingScreen({super.key});
@@ -20,7 +21,21 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
   void initState() {
     super.initState();
     _checkPermissions();
+    _checkTrackingStatus();
+  }
+
+  Future<void> _checkTrackingStatus() async {
     _isTrackingEnabled = _geoTrackingService.isGeoTrackingEnabled();
+
+    // Also check if the background service is actually running
+    bool isServiceRunning =
+        await _geoTrackingService.isBackgroundServiceRunning();
+
+    if (_isTrackingEnabled != isServiceRunning) {
+      setState(() {
+        _isTrackingEnabled = isServiceRunning;
+      });
+    }
   }
 
   Future<void> _checkPermissions() async {
@@ -44,6 +59,22 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Geo Tracking'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () async {
+              setState(() {
+                _isLoading = true;
+              });
+              await _checkTrackingStatus();
+              await _checkPermissions();
+              setState(() {
+                _isLoading = false;
+              });
+            },
+            tooltip: 'Refresh Status',
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -133,12 +164,41 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
         const SizedBox(height: 16),
         Text(
           _isTrackingEnabled
-              ? 'Your location is being tracked in the background.'
-              : 'Start tracking to monitor your location.',
+              ? 'Your location is being tracked in the background every 15 minutes. This will continue even when the app is closed or killed.'
+              : 'Start tracking to monitor your location in the background.',
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 16),
         ),
         const SizedBox(height: 32),
+        FutureBuilder<bool>(
+          future: _geoTrackingService.isBackgroundServiceRunning(),
+          builder: (context, snapshot) {
+            final bool isServiceRunning = snapshot.data ?? false;
+
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: isServiceRunning ? Colors.green : Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Background Service: ${isServiceRunning ? "Running" : "Stopped"}',
+                  style: TextStyle(
+                    color: isServiceRunning ? Colors.green : Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 24),
         ElevatedButton(
           onPressed: () async {
             setState(() {
@@ -167,8 +227,10 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
               await _geoTrackingService.startTracking();
             }
 
+            // Check the actual status after operation
+            await _checkTrackingStatus();
+
             setState(() {
-              _isTrackingEnabled = _geoTrackingService.isGeoTrackingEnabled();
               _isLoading = false;
             });
           },
@@ -203,6 +265,28 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
               ],
             ),
           ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const LocationHistoryScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.history),
+                label: const Text('Location History'),
+                style: ElevatedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );

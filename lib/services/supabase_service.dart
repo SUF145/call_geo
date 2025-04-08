@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import '../models/user_model.dart';
+import '../models/location_model.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:uuid/uuid.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -119,6 +122,68 @@ class SupabaseService {
       return null;
     } catch (e) {
       return null;
+    }
+  }
+
+  // Save location to Supabase
+  Future<bool> saveLocation(Position position) async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return false;
+
+      final uuid = Uuid();
+      final locationData = {
+        'id': uuid.v4(),
+        'user_id': user.id,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'accuracy': position.accuracy,
+        'altitude': position.altitude,
+        'speed': position.speed,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+
+      await supabase.from('locations').insert(locationData);
+      return true;
+    } catch (e) {
+      debugPrint('Error saving location: $e');
+      return false;
+    }
+  }
+
+  // Get user's location history
+  Future<List<LocationModel>> getLocationHistory() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return [];
+
+      final data = await supabase
+          .from('locations')
+          .select()
+          .eq('user_id', user.id)
+          .order('timestamp', ascending: false);
+
+      return data
+          .map<LocationModel>((item) => LocationModel.fromJson(item))
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting location history: $e');
+      return [];
+    }
+  }
+
+  // Delete all location history for current user
+  Future<bool> clearLocationHistory() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return false;
+
+      await supabase.from('locations').delete().eq('user_id', user.id);
+
+      return true;
+    } catch (e) {
+      debugPrint('Error clearing location history: $e');
+      return false;
     }
   }
 }
