@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
+import '../models/user_geofence_settings_model.dart';
 import '../services/supabase_service.dart';
 import 'add_user_screen.dart';
+import 'user_geofence_settings_screen.dart';
 
 class UserManagementScreen extends StatefulWidget {
   final String adminId;
-  
+
   const UserManagementScreen({
     Key? key,
     required this.adminId,
@@ -17,33 +19,60 @@ class UserManagementScreen extends StatefulWidget {
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
   final SupabaseService _supabaseService = SupabaseService();
-  List<UserModel> _users = [];
+  List<Map<String, dynamic>> _usersWithSettings = [];
   bool _isLoading = true;
-  
+
   @override
   void initState() {
     super.initState();
     _loadUsers();
   }
-  
+
   Future<void> _loadUsers() async {
     setState(() {
       _isLoading = true;
     });
-    
-    final users = await _supabaseService.getUsersByAdmin(widget.adminId);
-    
+
+    final usersWithSettings =
+        await _supabaseService.getUsersWithGeofenceSettings(widget.adminId);
+
     setState(() {
-      _users = users;
+      _usersWithSettings = usersWithSettings;
       _isLoading = false;
     });
   }
-  
+
+  Future<void> _manageGeofence(
+      UserModel user, UserGeofenceSettings? settings) async {
+    // Get the latest settings for this user before navigating
+    final latestSettings =
+        await _supabaseService.getUserGeofenceSettings(user.id);
+
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => UserGeofenceSettingsScreen(
+          user: user,
+          adminId: widget.adminId,
+          initialSettings:
+              latestSettings, // Use the latest settings from the database
+        ),
+      ),
+    );
+
+    // Always refresh the list when returning from the settings screen
+    // This ensures we have the latest data
+    _loadUsers();
+  }
+
   Future<void> _editUser(UserModel user) async {
     // Show dialog to edit user details
-    final TextEditingController nameController = TextEditingController(text: user.fullName);
-    final TextEditingController emailController = TextEditingController(text: user.email);
-    
+    final TextEditingController nameController =
+        TextEditingController(text: user.fullName);
+    final TextEditingController emailController =
+        TextEditingController(text: user.email);
+
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -81,23 +110,23 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         ],
       ),
     );
-    
+
     if (result == true) {
       final success = await _supabaseService.updateUser(
         userId: user.id,
         fullName: nameController.text.trim(),
         email: emailController.text.trim(),
       );
-      
+
       if (success) {
         _loadUsers(); // Refresh the list
       }
     }
-    
+
     nameController.dispose();
     emailController.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,7 +142,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _users.isEmpty
+          : _usersWithSettings.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -127,10 +156,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         onPressed: () async {
                           final result = await Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => AddUserScreen(adminId: widget.adminId),
+                              builder: (context) =>
+                                  AddUserScreen(adminId: widget.adminId),
                             ),
                           );
-                          
+
                           if (result == true) {
                             _loadUsers();
                           }
@@ -145,21 +175,74 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   children: [
                     Expanded(
                       child: ListView.builder(
-                        itemCount: _users.length,
+                        itemCount: _usersWithSettings.length,
                         itemBuilder: (context, index) {
-                          final user = _users[index];
+                          final user =
+                              _usersWithSettings[index]['user'] as UserModel;
+                          final settings = _usersWithSettings[index]
+                              ['geofence_settings'] as UserGeofenceSettings?;
+
                           return Card(
                             margin: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 8,
                             ),
-                            child: ListTile(
-                              title: Text(user.fullName),
-                              subtitle: Text(user.email),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.edit),
-                                onPressed: () => _editUser(user),
-                              ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ListTile(
+                                  title: Text(user.fullName),
+                                  subtitle: Text(user.email),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit),
+                                        onPressed: () => _editUser(user),
+                                        tooltip: 'Edit User',
+                                      ),
+                                      IconButton(
+                                        icon: Icon(
+                                          settings?.enabled == true
+                                              ? Icons.location_on
+                                              : Icons.location_off,
+                                          color: settings?.enabled == true
+                                              ? Colors.green
+                                              : Colors.grey,
+                                        ),
+                                        onPressed: () =>
+                                            _manageGeofence(user, settings),
+                                        tooltip: 'Manage Geofence',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (settings?.enabled == true)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      left: 16.0,
+                                      right: 16.0,
+                                      bottom: 8.0,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.fence,
+                                          size: 16,
+                                          color: Colors.green,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Geofence active: ${settings!.radius.toStringAsFixed(0)}m radius',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.green,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ),
                           );
                         },
@@ -171,10 +254,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         onPressed: () async {
                           final result = await Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => AddUserScreen(adminId: widget.adminId),
+                              builder: (context) =>
+                                  AddUserScreen(adminId: widget.adminId),
                             ),
                           );
-                          
+
                           if (result == true) {
                             _loadUsers();
                           }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import '../models/user_model.dart';
-import '../models/location_model.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:uuid/uuid.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../models/user_model.dart';
+import '../models/location_model.dart';
+import '../models/user_geofence_settings_model.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -426,6 +428,142 @@ class SupabaseService {
     } catch (e) {
       debugPrint('Error saving location: $e');
       return false;
+    }
+  }
+
+  // Get user geofence settings
+  Future<UserGeofenceSettings?> getUserGeofenceSettings(String userId) async {
+    try {
+      debugPrint('Fetching geofence settings for user: $userId');
+      final result = await supabase
+          .from('user_geofence_settings')
+          .select()
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (result == null) {
+        debugPrint('No geofence settings found for user: $userId');
+        return null;
+      }
+
+      final settings = UserGeofenceSettings.fromJson(result);
+      debugPrint(
+          'Found geofence settings for user $userId: ${settings.center.latitude}, ${settings.center.longitude}, radius: ${settings.radius}, enabled: ${settings.enabled}');
+      return settings;
+    } catch (e) {
+      debugPrint('Error getting user geofence settings: $e');
+      return null;
+    }
+  }
+
+  // Save user geofence settings
+  Future<bool> saveUserGeofenceSettings({
+    required String userId,
+    required String adminId,
+    required bool enabled,
+    required LatLng center,
+    required double radius,
+  }) async {
+    try {
+      debugPrint(
+          'Saving geofence settings for user $userId: ${center.latitude}, ${center.longitude}, radius: $radius, enabled: $enabled');
+
+      // Check if settings already exist for this user
+      final existingSettings = await supabase
+          .from('user_geofence_settings')
+          .select('id')
+          .eq('user_id', userId);
+
+      final now = DateTime.now().toIso8601String();
+
+      if (existingSettings.isNotEmpty) {
+        debugPrint('Updating existing geofence settings for user $userId');
+        // Update existing settings
+        await supabase.from('user_geofence_settings').update({
+          'admin_id': adminId,
+          'enabled': enabled,
+          'latitude': center.latitude,
+          'longitude': center.longitude,
+          'radius': radius,
+          'updated_at': now,
+        }).eq('user_id', userId);
+      } else {
+        debugPrint('Creating new geofence settings for user $userId');
+        // Create new settings
+        await supabase.from('user_geofence_settings').insert({
+          'user_id': userId,
+          'admin_id': adminId,
+          'enabled': enabled,
+          'latitude': center.latitude,
+          'longitude': center.longitude,
+          'radius': radius,
+          'created_at': now,
+          'updated_at': now,
+        });
+      }
+
+      debugPrint('Successfully saved geofence settings for user $userId');
+      return true;
+    } catch (e) {
+      debugPrint('Error saving user geofence settings: $e');
+      return false;
+    }
+  }
+
+  // Toggle user geofence settings
+  Future<bool> toggleUserGeofenceSettings({
+    required String userId,
+    required bool enabled,
+  }) async {
+    try {
+      // Check if settings exist for this user
+      final existingSettings = await supabase
+          .from('user_geofence_settings')
+          .select('id')
+          .eq('user_id', userId);
+
+      if (existingSettings.isEmpty) {
+        debugPrint('No geofence settings found for user $userId');
+        return false;
+      }
+
+      // Update enabled status
+      await supabase.from('user_geofence_settings').update({
+        'enabled': enabled,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('user_id', userId);
+
+      return true;
+    } catch (e) {
+      debugPrint('Error toggling user geofence settings: $e');
+      return false;
+    }
+  }
+
+  // Get all users with their geofence settings
+  Future<List<Map<String, dynamic>>> getUsersWithGeofenceSettings(
+      String adminId) async {
+    try {
+      // Get all users created by this admin
+      final users = await getUsersByAdmin(adminId);
+
+      // Get geofence settings for each user
+      List<Map<String, dynamic>> usersWithSettings = [];
+
+      for (var user in users) {
+        // Get geofence settings for this user
+        final settings = await getUserGeofenceSettings(user.id);
+
+        usersWithSettings.add({
+          'user': user,
+          'geofence_settings': settings,
+        });
+      }
+
+      return usersWithSettings;
+    } catch (e) {
+      debugPrint('Error getting users with geofence settings: $e');
+      return [];
     }
   }
 

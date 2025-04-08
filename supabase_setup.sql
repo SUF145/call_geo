@@ -9,16 +9,6 @@ CREATE TABLE IF NOT EXISTS profiles (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create admin_settings table to ensure only one admin exists
-CREATE TABLE IF NOT EXISTS admin_settings (
-  id SERIAL PRIMARY KEY,
-  admin_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE SET NULL,
-  admin_email TEXT,
-  max_admins INTEGER DEFAULT 1, -- Limit the number of admins
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
 -- Create a trigger to enforce single admin constraint
 CREATE OR REPLACE FUNCTION check_admin_limit()
 RETURNS TRIGGER AS $$
@@ -60,21 +50,6 @@ CREATE POLICY "Admins can update all profiles"
 CREATE POLICY "Admins can insert profiles"
   ON profiles FOR INSERT
   WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' OR auth.uid() = id);
-
--- Admin settings policies
-ALTER TABLE admin_settings ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Only admins can view admin settings"
-  ON admin_settings FOR SELECT
-  USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
-
-CREATE POLICY "Only admins can update admin settings"
-  ON admin_settings FOR UPDATE
-  USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
-
-CREATE POLICY "Only admins can insert admin settings"
-  ON admin_settings FOR INSERT
-  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
 
 -- Create locations table
 CREATE TABLE IF NOT EXISTS locations (

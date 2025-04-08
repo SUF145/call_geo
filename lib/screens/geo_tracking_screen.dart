@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/geo_tracking_service.dart';
 import '../services/supabase_service.dart';
+import '../services/geofence_service.dart';
 import '../models/user_model.dart';
+import '../models/user_geofence_settings_model.dart';
 import 'location_history_screen.dart';
 import 'geofence_screen.dart';
 
@@ -15,16 +17,45 @@ class GeoTrackingScreen extends StatefulWidget {
 
 class GeoTrackingScreenState extends State<GeoTrackingScreen> {
   final GeoTrackingService _geoTrackingService = GeoTrackingService();
+  final GeofenceService _geofenceService = GeofenceService();
+  final SupabaseService _supabaseService = SupabaseService();
 
   bool _hasLocationPermission = false;
   bool _isTrackingEnabled = false;
   bool _isLoading = true;
+  bool _hasGeofenceEnabled = false;
+  UserGeofenceSettings? _userGeofenceSettings;
 
   @override
   void initState() {
     super.initState();
     _checkPermissions();
     _checkTrackingStatus();
+    _checkUserGeofenceSettings();
+  }
+
+  // Check if user has geofence settings enabled
+  Future<void> _checkUserGeofenceSettings() async {
+    try {
+      final currentUser = await _supabaseService.getCurrentUser();
+      if (currentUser != null) {
+        final settings =
+            await _supabaseService.getUserGeofenceSettings(currentUser.id);
+
+        setState(() {
+          _userGeofenceSettings = settings;
+          _hasGeofenceEnabled = settings?.enabled ?? false;
+        });
+
+        if (_hasGeofenceEnabled && settings != null) {
+          // Load geofence settings and start monitoring
+          await _geofenceService.loadUserGeofenceSettings(currentUser.id);
+          await _geofenceService.startMonitoring();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking user geofence settings: $e');
+    }
   }
 
   Future<void> _checkTrackingStatus() async {
@@ -289,7 +320,7 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
 
         const SizedBox(height: 16),
 
-        // Geofence Button (only visible to admin users)
+        // Geofence Button (different for admin users and regular users)
         FutureBuilder<UserModel?>(
           future: SupabaseService().getCurrentUser(),
           builder: (context, snapshot) {
@@ -299,6 +330,7 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
 
             final user = snapshot.data;
             if (user != null && user.isAdmin) {
+              // Admin users see the geofence settings button
               return ElevatedButton.icon(
                 onPressed: () {
                   Navigator.of(context).push(
@@ -315,8 +347,34 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
                   backgroundColor: Colors.orange,
                 ),
               );
+            } else if (_hasGeofenceEnabled) {
+              // Regular users with geofence enabled see the geofence status
+              return ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const GeofenceScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.fence),
+                label: const Text('View Geofence Restrictions'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  minimumSize: const Size(double.infinity, 0),
+                  backgroundColor: Colors.green,
+                ),
+              );
             } else {
-              return const SizedBox.shrink(); // Hide button for non-admin users
+              // Regular users without geofence see a message
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12.0),
+                child: Text(
+                  'Geofencing is not enabled for your account. Contact your administrator.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+              );
             }
           },
         ),
