@@ -9,8 +9,10 @@ import 'services/supabase_service.dart';
 import 'services/call_recording_service.dart';
 import 'services/geo_tracking_service.dart';
 import 'services/background_location_service.dart';
+import 'models/user_model.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/admin_home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,7 +78,7 @@ class AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<AuthWrapper> {
   bool _isLoading = true;
-  bool _isAuthenticated = false;
+  UserModel? _currentUser;
 
   @override
   void initState() {
@@ -87,7 +89,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Future<void> _checkAuth() async {
     final user = await SupabaseService().getCurrentUser();
     setState(() {
-      _isAuthenticated = user != null;
+      _currentUser = user;
       _isLoading = false;
     });
   }
@@ -102,8 +104,20 @@ class _AuthWrapperState extends State<AuthWrapper> {
       );
     }
 
-    if (_isAuthenticated) {
-      return const HomeScreen();
+    if (_currentUser != null) {
+      // Debug information
+      debugPrint('Current user: ${_currentUser!.email}');
+      debugPrint('User role: ${_currentUser!.role}');
+      debugPrint('Is admin: ${_currentUser!.isAdmin}');
+
+      // Navigate based on user role
+      if (_currentUser!.isAdmin) {
+        debugPrint('Navigating to AdminHomeScreen');
+        return AdminHomeScreen(admin: _currentUser!);
+      } else {
+        debugPrint('Navigating to HomeScreen');
+        return const HomeScreen();
+      }
     } else {
       return const LoginScreen();
     }

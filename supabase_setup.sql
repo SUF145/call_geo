@@ -3,19 +3,78 @@ CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   full_name TEXT,
+  mobile_number TEXT, -- Store phone number as text to preserve formatting
+  role TEXT DEFAULT 'user' CHECK (role IN ('admin', 'user')), -- Restrict role values
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL, -- Track which admin created this user
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Create admin_settings table to ensure only one admin exists
+CREATE TABLE IF NOT EXISTS admin_settings (
+  id SERIAL PRIMARY KEY,
+  admin_id UUID UNIQUE REFERENCES auth.users(id) ON DELETE SET NULL,
+  admin_email TEXT,
+  max_admins INTEGER DEFAULT 1, -- Limit the number of admins
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create a trigger to enforce single admin constraint
+CREATE OR REPLACE FUNCTION check_admin_limit()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF (SELECT COUNT(*) FROM profiles WHERE role = 'admin') > 1 THEN
+    RAISE EXCEPTION 'Only one admin account is allowed';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER enforce_single_admin
+AFTER INSERT OR UPDATE ON profiles
+FOR EACH ROW
+WHEN (NEW.role = 'admin')
+EXECUTE FUNCTION check_admin_limit();
 
 -- Create RLS policies for profiles
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own profile" 
-  ON profiles FOR SELECT 
+-- Basic user policies
+CREATE POLICY "Users can view their own profile"
+  ON profiles FOR SELECT
   USING (auth.uid() = id);
 
-CREATE POLICY "Users can update their own profile" 
-  ON profiles FOR UPDATE 
+CREATE POLICY "Users can update their own profile"
+  ON profiles FOR UPDATE
   USING (auth.uid() = id);
+
+-- Admin policies for user management
+CREATE POLICY "Admins can view all profiles"
+  ON profiles FOR SELECT
+  USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
+
+CREATE POLICY "Admins can update all profiles"
+  ON profiles FOR UPDATE
+  USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
+
+CREATE POLICY "Admins can insert profiles"
+  ON profiles FOR INSERT
+  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' OR auth.uid() = id);
+
+-- Admin settings policies
+ALTER TABLE admin_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Only admins can view admin settings"
+  ON admin_settings FOR SELECT
+  USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
+
+CREATE POLICY "Only admins can update admin settings"
+  ON admin_settings FOR UPDATE
+  USING ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
+
+CREATE POLICY "Only admins can insert admin settings"
+  ON admin_settings FOR INSERT
+  WITH CHECK ((SELECT role FROM profiles WHERE id = auth.uid()) = 'admin');
 
 -- Create locations table
 CREATE TABLE IF NOT EXISTS locations (
@@ -36,14 +95,14 @@ CREATE INDEX IF NOT EXISTS locations_user_id_timestamp_idx ON locations (user_id
 -- Create RLS policies for locations
 ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can insert their own locations" 
-  ON locations FOR INSERT 
+CREATE POLICY "Users can insert their own locations"
+  ON locations FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can view their own locations" 
-  ON locations FOR SELECT 
+CREATE POLICY "Users can view their own locations"
+  ON locations FOR SELECT
   USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete their own locations" 
-  ON locations FOR DELETE 
+CREATE POLICY "Users can delete their own locations"
+  ON locations FOR DELETE
   USING (auth.uid() = user_id);

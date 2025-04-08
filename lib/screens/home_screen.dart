@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
+import '../models/user_model.dart';
 import 'login_screen.dart';
 import 'call_recording_screen.dart';
 import 'geo_tracking_screen.dart';

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/geo_tracking_service.dart';
+import '../services/supabase_service.dart';
+import '../models/user_model.dart';
 import 'location_history_screen.dart';
 import 'geofence_screen.dart';
 
@@ -287,22 +289,36 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
 
         const SizedBox(height: 16),
 
-        // Geofence Button
-        ElevatedButton.icon(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const GeofenceScreen(),
-              ),
-            );
+        // Geofence Button (only visible to admin users)
+        FutureBuilder<UserModel?>(
+          future: SupabaseService().getCurrentUser(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(height: 48); // Placeholder while loading
+            }
+
+            final user = snapshot.data;
+            if (user != null && user.isAdmin) {
+              return ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const GeofenceScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.fence),
+                label: const Text('Geofence Settings'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  minimumSize: const Size(double.infinity, 0),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            } else {
+              return const SizedBox.shrink(); // Hide button for non-admin users
+            }
           },
-          icon: const Icon(Icons.fence),
-          label: const Text('Geofence Settings'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            minimumSize: const Size(double.infinity, 0),
-            backgroundColor: Colors.orange,
-          ),
         ),
       ],
     );

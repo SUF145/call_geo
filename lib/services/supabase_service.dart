@@ -27,13 +27,124 @@ class SupabaseService {
     );
   }
 
-  // Sign Up
-  Future<UserModel?> signUp({
+  // Check if admin exists
+  Future<bool> adminExists() async {
+    try {
+      // First check the admin_settings table
+      final adminSettings =
+          await supabase.from('admin_settings').select('admin_id').limit(1);
+
+      if (adminSettings.isNotEmpty && adminSettings[0]['admin_id'] != null) {
+        return true;
+      }
+
+      // As a fallback, check the profiles table
+      final result = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'admin')
+          .limit(1);
+
+      return result.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking if admin exists: $e');
+      return false;
+    }
+  }
+
+  // Admin Sign Up
+  Future<UserModel?> adminSignUp({
     required String email,
     required String password,
     required String fullName,
+    required String mobileNumber,
   }) async {
     try {
+      debugPrint('Starting admin signup for: $email');
+      // First check if an admin already exists
+      final adminExistsResult = await adminExists();
+      debugPrint('Admin exists check result: $adminExistsResult');
+
+      if (adminExistsResult) {
+        debugPrint('Admin already exists, aborting signup');
+        Fluttertoast.showToast(
+          msg: "An admin account already exists",
+          toastLength: Toast.LENGTH_LONG,
+        );
+        return null;
+      }
+
+      debugPrint('Creating auth user for admin');
+      final AuthResponse response = await supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'full_name': fullName},
+      );
+
+      if (response.user != null) {
+        debugPrint('Auth user created with ID: ${response.user!.id}');
+        // Create admin profile in the database
+        // Explicitly set the role to 'admin' to ensure it's recognized correctly
+        final profileData = {
+          'id': response.user!.id,
+          'email': email,
+          'full_name': fullName,
+          'mobile_number': mobileNumber,
+          'role':
+              'admin', // This must match the value expected in UserModel.fromJson
+          'created_at': DateTime.now().toIso8601String(),
+        };
+
+        debugPrint('Creating admin profile with data: $profileData');
+        await supabase.from('profiles').insert(profileData);
+
+        // Create entry in admin_settings table
+        final adminSettingsData = {
+          'admin_id': response.user!.id,
+          'admin_email': email,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        };
+
+        debugPrint(
+            'Creating admin_settings entry with data: $adminSettingsData');
+        await supabase.from('admin_settings').insert(adminSettingsData);
+
+        final userModel = UserModel(
+          id: response.user!.id,
+          email: email,
+          fullName: fullName,
+          mobileNumber: mobileNumber,
+          role: UserRole.admin,
+        );
+
+        debugPrint(
+            'Admin user created successfully with role: ${userModel.role}');
+        debugPrint('Is admin: ${userModel.isAdmin}');
+
+        return userModel;
+      }
+
+      debugPrint('Auth user creation failed - user is null');
+      return null;
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error during admin sign up: ${e.toString()}",
+        toastLength: Toast.LENGTH_LONG,
+      );
+      return null;
+    }
+  }
+
+  // Add User (by Admin)
+  Future<UserModel?> addUser({
+    required String email,
+    required String password,
+    required String fullName,
+    required String adminId,
+  }) async {
+    try {
+      // Create auth user through regular signup
       final AuthResponse response = await supabase.auth.signUp(
         email: email,
         password: password,
@@ -46,6 +157,8 @@ class SupabaseService {
           'id': response.user!.id,
           'email': email,
           'full_name': fullName,
+          'role': 'user',
+          'created_by': adminId,
           'created_at': DateTime.now().toIso8601String(),
         });
 
@@ -53,30 +166,34 @@ class SupabaseService {
           id: response.user!.id,
           email: email,
           fullName: fullName,
+          role: UserRole.user,
+          createdBy: adminId,
         );
       }
       return null;
     } catch (e) {
       Fluttertoast.showToast(
-        msg: "Error during sign up: ${e.toString()}",
+        msg: "Error adding user: ${e.toString()}",
         toastLength: Toast.LENGTH_LONG,
       );
       return null;
     }
   }
 
-  // Sign In
+  // Sign In (for both admin and regular users)
   Future<UserModel?> signIn({
     required String email,
     required String password,
   }) async {
     try {
+      debugPrint('Signing in with email: $email');
       final AuthResponse response = await supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
 
       if (response.user != null) {
+        debugPrint('Auth successful for user ID: ${response.user!.id}');
         // Get user profile from the database
         final userData = await supabase
             .from('profiles')
@@ -84,15 +201,142 @@ class SupabaseService {
             .eq('id', response.user!.id)
             .single();
 
-        return UserModel.fromJson(userData);
+        debugPrint('User profile data: $userData');
+        final userModel = UserModel.fromJson(userData);
+        debugPrint('User role from DB: ${userData['role']}');
+        debugPrint('User role in model: ${userModel.role}');
+        debugPrint('Is admin: ${userModel.isAdmin}');
+
+        return userModel;
       }
+      debugPrint('Auth failed - user is null');
       return null;
     } catch (e) {
+      debugPrint('Error during sign in: $e');
       Fluttertoast.showToast(
         msg: "Error during sign in: ${e.toString()}",
         toastLength: Toast.LENGTH_LONG,
       );
       return null;
+    }
+  }
+
+  // Get all users created by an admin
+  Future<List<UserModel>> getUsersByAdmin(String adminId) async {
+    try {
+      final result = await supabase
+          .from('profiles')
+          .select()
+          .eq('created_by', adminId)
+          .eq('role', 'user');
+
+      return result.map((json) => UserModel.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error getting users by admin: $e');
+      return [];
+    }
+  }
+
+  // Update user details
+  Future<bool> updateUser({
+    required String userId,
+    String? fullName,
+    String? email,
+    String? role,
+  }) async {
+    try {
+      final Map<String, dynamic> updates = {};
+
+      if (fullName != null) updates['full_name'] = fullName;
+      if (email != null) updates['email'] = email;
+      if (role != null) updates['role'] = role;
+
+      if (updates.isEmpty) return true; // Nothing to update
+
+      debugPrint('Updating user $userId with data: $updates');
+      await supabase.from('profiles').update(updates).eq('id', userId);
+
+      return true;
+    } catch (e) {
+      debugPrint('Error updating user: $e');
+      Fluttertoast.showToast(
+        msg: "Error updating user: ${e.toString()}",
+        toastLength: Toast.LENGTH_LONG,
+      );
+      return false;
+    }
+  }
+
+  // Promote user to admin
+  Future<bool> promoteToAdmin(String userId) async {
+    try {
+      debugPrint('Promoting user $userId to admin role');
+
+      // Update the user's role to admin
+      final success = await updateUser(userId: userId, role: 'admin');
+
+      if (success) {
+        // Get the user's email
+        final userData = await supabase
+            .from('profiles')
+            .select('email')
+            .eq('id', userId)
+            .single();
+
+        // Create entry in admin_settings table
+        await supabase.from('admin_settings').insert({
+          'admin_id': userId,
+          'admin_email': userData['email'],
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+
+        debugPrint('User successfully promoted to admin');
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('Error promoting user to admin: $e');
+      Fluttertoast.showToast(
+        msg: "Error promoting user to admin: ${e.toString()}",
+        toastLength: Toast.LENGTH_LONG,
+      );
+      return false;
+    }
+  }
+
+  // Delete admin account
+  Future<bool> deleteAdminAccount(String adminId) async {
+    try {
+      // First check if this is an admin account
+      final userData = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', adminId)
+          .single();
+
+      if (userData['role'] != 'admin') {
+        Fluttertoast.showToast(
+          msg: "Only admin accounts can be deleted",
+          toastLength: Toast.LENGTH_LONG,
+        );
+        return false;
+      }
+
+      // Remove from admin_settings table first
+      await supabase.from('admin_settings').delete().eq('admin_id', adminId);
+
+      // Delete the admin user
+      await supabase.auth.admin.deleteUser(adminId);
+
+      return true;
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: "Error deleting admin account: ${e.toString()}",
+        toastLength: Toast.LENGTH_LONG,
+      );
+      return false;
     }
   }
 
@@ -112,15 +356,70 @@ class SupabaseService {
   Future<UserModel?> getCurrentUser() async {
     try {
       final user = supabase.auth.currentUser;
+      debugPrint('Current auth user: ${user?.email}');
 
       if (user != null) {
-        final userData =
-            await supabase.from('profiles').select().eq('id', user.id).single();
+        try {
+          final userData = await supabase
+              .from('profiles')
+              .select()
+              .eq('id', user.id)
+              .single();
 
-        return UserModel.fromJson(userData);
+          debugPrint('User profile data: $userData');
+          final userModel = UserModel.fromJson(userData);
+          debugPrint('User role from DB: ${userData['role']}');
+          debugPrint('User role in model: ${userModel.role}');
+          debugPrint('Is admin: ${userModel.isAdmin}');
+
+          return userModel;
+        } catch (e) {
+          debugPrint('Error getting user profile: $e');
+
+          // If the profile doesn't exist, create one
+          debugPrint('Error message: ${e.toString()}');
+          if (e.toString().contains('no rows') ||
+              e.toString().contains('0 rows')) {
+            debugPrint('Creating profile for user ${user.id}');
+            return await _createUserProfile(user);
+          }
+          rethrow;
+        }
       }
       return null;
     } catch (e) {
+      debugPrint('Error getting current user: $e');
+      return null;
+    }
+  }
+
+  // Create a profile for a user
+  Future<UserModel?> _createUserProfile(User user) async {
+    try {
+      final email = user.email ?? '';
+      final fullName =
+          user.userMetadata?['full_name'] ?? email.split('@').first;
+
+      // Create profile in the database
+      final profileData = {
+        'id': user.id,
+        'email': email,
+        'full_name': fullName,
+        'role': 'user', // Default role is user
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      debugPrint('Creating user profile with data: $profileData');
+      await supabase.from('profiles').insert(profileData);
+
+      return UserModel(
+        id: user.id,
+        email: email,
+        fullName: fullName,
+        role: UserRole.user,
+      );
+    } catch (e) {
+      debugPrint('Error creating user profile: $e');
       return null;
     }
   }
