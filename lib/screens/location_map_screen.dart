@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/location_model.dart';
 import '../services/supabase_service.dart';
+import '../services/geofence_service.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'dart:typed_data';
+import 'dart:math' as math;
 
 class LocationMapScreen extends StatefulWidget {
   final List<LocationModel>? initialLocations;
@@ -18,20 +21,30 @@ class LocationMapScreen extends StatefulWidget {
 
 class _LocationMapScreenState extends State<LocationMapScreen> {
   final SupabaseService _supabaseService = SupabaseService();
+  final GeofenceService _geofenceService = GeofenceService();
   final Completer<GoogleMapController> _controller = Completer();
 
   List<LocationModel> _locations = [];
   bool _isLoading = true;
+  bool _isGeofenceEnabled = false;
+  bool _isEditingGeofence = false;
+  double _geofenceRadius = 500; // Default radius in meters
+  LatLng? _geofenceCenter;
 
   // Map markers and polylines
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
+  final Set<Circle> _circles = {}; // For geofence visualization
 
   // Default camera position (will be updated with actual data)
   CameraPosition _initialCameraPosition = const CameraPosition(
     target: LatLng(0, 0),
     zoom: 14,
   );
+
+  // Controller for radius input
+  final TextEditingController _radiusController =
+      TextEditingController(text: '500');
 
   // Method to create a custom marker with a number
   Future<BitmapDescriptor> _createMarkerWithNumber(
@@ -210,6 +223,37 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Location History Map'),
+        actions: [
+          // Geofence edit button
+          IconButton(
+            icon: Icon(_isEditingGeofence ? Icons.cancel : Icons.edit_location),
+            onPressed: _toggleGeofenceEditing,
+            tooltip: _isEditingGeofence ? 'Cancel' : 'Set Restricted Area',
+          ),
+          // Geofence toggle button
+          IconButton(
+            icon: Icon(
+                _isGeofenceEnabled ? Icons.location_off : Icons.location_on),
+            onPressed: _isGeofenceEnabled
+                ? _stopGeofence
+                : (_geofenceCenter != null
+                    ? () => _setupGeofence(_geofenceCenter!)
+                    : null),
+            tooltip: _isGeofenceEnabled
+                ? 'Disable Restricted Area'
+                : 'Enable Restricted Area',
+            color: _isGeofenceEnabled ? Colors.red : null,
+          ),
+          // Refresh button
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadLocationHistory,
+            tooltip: 'Refresh',
+          ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _locations.isEmpty
@@ -226,6 +270,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                       initialCameraPosition: _initialCameraPosition,
                       markers: _markers,
                       polylines: _polylines,
+                      circles: _circles, // Add geofence circle
                       myLocationEnabled: true,
                       myLocationButtonEnabled: true,
                       zoomControlsEnabled: true,
@@ -236,6 +281,11 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                         _controller.complete(controller);
                         _moveCamera();
                       },
+                      onTap: _isEditingGeofence
+                          ? (LatLng position) {
+                              _setupGeofence(position);
+                            }
+                          : null,
                     ),
                     Positioned(
                       bottom: 16,
@@ -280,6 +330,198 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                     ),
                   ],
                 ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _radiusController.dispose();
+    _geofenceService.stopMonitoring();
+    super.dispose();
+  }
+
+  // Set up geofence at the specified location
+  void _setupGeofence(LatLng center) {
+    // Show dialog to set radius
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Restricted Area'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+                'Tap on the map to set the center of the restricted area.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _radiusController,
+              decoration: const InputDecoration(
+                labelText: 'Radius (meters)',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              setState(() {
+                _isEditingGeofence = false;
+              });
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+
+              setState(() {
+                _geofenceCenter = center;
+                _isEditingGeofence = false;
+              });
+
+              // Update the radius from the text controller
+              try {
+                _geofenceRadius = double.parse(_radiusController.text);
+              } catch (e) {
+                _geofenceRadius = 500; // Default to 500m if parsing fails
+                _radiusController.text = '500';
+              }
+
+              // Continue with setting up the geofence
+              _continueGeofenceSetup(center);
+            },
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Continue setting up the geofence after dialog
+  void _continueGeofenceSetup(LatLng center) {
+    // Add a circle to visualize the geofence
+    _updateGeofenceCircle();
+
+    // Set up the geofence service
+    _geofenceService.setupGeofence(
+      center: center,
+      radiusInMeters: _geofenceRadius,
+      onExit: _handleGeofenceExit,
+      onEnter: _handleGeofenceEnter,
+    );
+
+    // Start monitoring
+    _geofenceService.startMonitoring().then((success) {
+      setState(() {
+        _isGeofenceEnabled = success;
+      });
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Geofence monitoring started'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to start geofence monitoring'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    });
+  }
+
+  // Update the geofence circle visualization
+  void _updateGeofenceCircle() {
+    if (_geofenceCenter == null) return;
+
+    setState(() {
+      _circles.clear();
+      _circles.add(
+        Circle(
+          circleId: const CircleId('geofence'),
+          center: _geofenceCenter!,
+          radius: _geofenceRadius,
+          fillColor: Colors.blue.withOpacity(0.2),
+          strokeColor: Colors.blue,
+          strokeWidth: 2,
+        ),
+      );
+    });
+  }
+
+  // Handle when user exits the geofence
+  void _handleGeofenceExit(Position position, double distanceFromCenter) {
+    // Show a dialog to alert the user
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Warning!'),
+          content: Text(
+              'You have left the restricted area! You are ${distanceFromCenter.toStringAsFixed(0)} meters away from the center.'),
+          backgroundColor: Colors.red[100],
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  // Handle when user re-enters the geofence
+  void _handleGeofenceEnter(Position position) {
+    // Show a snackbar to inform the user
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You are back in the allowed area'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
+  // Toggle geofence editing mode
+  void _toggleGeofenceEditing() {
+    setState(() {
+      _isEditingGeofence = !_isEditingGeofence;
+    });
+
+    if (_isEditingGeofence) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tap on the map to set the geofence center'),
+        ),
+      );
+    }
+  }
+
+  // Stop geofence monitoring
+  void _stopGeofence() {
+    _geofenceService.stopMonitoring();
+
+    setState(() {
+      _isGeofenceEnabled = false;
+      _circles.clear();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Geofence monitoring stopped'),
+      ),
     );
   }
 }

@@ -69,6 +69,10 @@ dependencies:
   google_maps_flutter_platform_interface: ^2.6.0
   flutter_polyline_points: ^2.0.0
 
+  # Geofencing and alerts
+  vibration: ^1.8.4
+  geolocator_platform_interface: ^4.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
