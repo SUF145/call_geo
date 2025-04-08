@@ -567,23 +567,38 @@ class SupabaseService {
     }
   }
 
-  // Get user's location history
+  // Get current user's location history
   Future<List<LocationModel>> getLocationHistory() async {
     try {
       final user = supabase.auth.currentUser;
       if (user == null) return [];
 
+      return await getUserLocationHistory(user.id);
+    } catch (e) {
+      debugPrint('Error getting location history: $e');
+      return [];
+    }
+  }
+
+  // Get a specific user's location history
+  Future<List<LocationModel>> getUserLocationHistory(String userId) async {
+    try {
+      debugPrint('Fetching location history for user: $userId');
       final data = await supabase
           .from('locations')
           .select()
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .order('timestamp', ascending: false);
 
-      return data
+      final locations = data
           .map<LocationModel>((item) => LocationModel.fromJson(item))
           .toList();
+
+      debugPrint(
+          'Found ${locations.length} location records for user: $userId');
+      return locations;
     } catch (e) {
-      debugPrint('Error getting location history: $e');
+      debugPrint('Error getting user location history: $e');
       return [];
     }
   }

@@ -4,6 +4,7 @@ import '../models/user_geofence_settings_model.dart';
 import '../services/supabase_service.dart';
 import 'add_user_screen.dart';
 import 'user_geofence_settings_screen.dart';
+import 'user_location_history_screen.dart';
 
 class UserManagementScreen extends StatefulWidget {
   final String adminId;
@@ -64,6 +65,18 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     // Always refresh the list when returning from the settings screen
     // This ensures we have the latest data
     _loadUsers();
+  }
+
+  Future<void> _viewLocationHistory(UserModel user) async {
+    if (!mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => UserLocationHistoryScreen(
+          user: user,
+        ),
+      ),
+    );
   }
 
   Future<void> _editUser(UserModel user) async {
@@ -213,6 +226,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                         onPressed: () =>
                                             _manageGeofence(user, settings),
                                         tooltip: 'Manage Geofence',
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.map,
+                                          color: Colors.blue,
+                                        ),
+                                        onPressed: () =>
+                                            _viewLocationHistory(user),
+                                        tooltip: 'View Location History',
                                       ),
                                     ],
                                   ),

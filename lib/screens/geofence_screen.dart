@@ -507,45 +507,45 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                           ),
                         ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _toggleGeofenceEditing,
-                              icon: Icon(_isEditingGeofence
-                                  ? Icons.cancel
-                                  : Icons.edit_location),
-                              label: Text(_isEditingGeofence
-                                  ? 'Cancel'
-                                  : 'Set Geofence'),
-                              style: ElevatedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                backgroundColor:
-                                    _isEditingGeofence ? Colors.red : null,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _toggleGeofenceMonitoring,
-                              icon: Icon(_isGeofenceEnabled
-                                  ? Icons.location_off
-                                  : Icons.location_on),
-                              label: Text(
-                                  _isGeofenceEnabled ? 'Disable' : 'Enable'),
-                              style: ElevatedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                backgroundColor: _isGeofenceEnabled
-                                    ? Colors.red
-                                    : Colors.green,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      // Row(
+                      //   children: [
+                      //     Expanded(
+                      //       child: ElevatedButton.icon(
+                      //         onPressed: _toggleGeofenceEditing,
+                      //         icon: Icon(_isEditingGeofence
+                      //             ? Icons.cancel
+                      //             : Icons.edit_location),
+                      //         label: Text(_isEditingGeofence
+                      //             ? 'Cancel'
+                      //             : 'Set Geofence'),
+                      //         style: ElevatedButton.styleFrom(
+                      //           padding:
+                      //               const EdgeInsets.symmetric(vertical: 12),
+                      //           backgroundColor:
+                      //               _isEditingGeofence ? Colors.red : null,
+                      //         ),
+                      //       ),
+                      //     ),
+                      //     const SizedBox(width: 8),
+                      //     Expanded(
+                      //       child: ElevatedButton.icon(
+                      //         onPressed: _toggleGeofenceMonitoring,
+                      //         icon: Icon(_isGeofenceEnabled
+                      //             ? Icons.location_off
+                      //             : Icons.location_on),
+                      //         label: Text(
+                      //             _isGeofenceEnabled ? 'Disable' : 'Enable'),
+                      //         style: ElevatedButton.styleFrom(
+                      //           padding:
+                      //               const EdgeInsets.symmetric(vertical: 12),
+                      //           backgroundColor: _isGeofenceEnabled
+                      //               ? Colors.red
+                      //               : Colors.green,
+                      //         ),
+                      //       ),
+                      //     ),
+                      //   ],
+                      // ),
                     ],
                   ),
                 ),
