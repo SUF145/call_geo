@@ -22,13 +22,13 @@ class AdminHomeScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _deleteAdminAccount(BuildContext context) async {
+  Future<void> _removeAdminPrivileges(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Admin Account'),
+        title: const Text('Remove Admin Privileges'),
         content: const Text(
-          'Are you sure you want to delete your admin account? This action cannot be undone.',
+          'Are you sure you want to remove your admin privileges? You will be signed out and your account will be converted to a regular user account.',
         ),
         actions: [
           TextButton(
@@ -38,7 +38,7 @@ class AdminHomeScreen extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: const Text('Remove Privileges'),
           ),
         ],
       ),
@@ -104,14 +104,6 @@ class AdminHomeScreen extends StatelessWidget {
                     Text('Email: ${admin.email}'),
                     Text('Mobile: ${admin.mobileNumber ?? "Not provided"}'),
                     const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: () => _deleteAdminAccount(context),
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      label: const Text(
-                        'Delete Admin Account',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
                   ],
                 ),
               ),

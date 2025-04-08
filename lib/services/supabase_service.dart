@@ -30,25 +30,21 @@ class SupabaseService {
   // Check if admin exists
   Future<bool> adminExists() async {
     try {
-      // First check the admin_settings table
-      final adminSettings =
-          await supabase.from('admin_settings').select('admin_id').limit(1);
-
-      if (adminSettings.isNotEmpty && adminSettings[0]['admin_id'] != null) {
-        return true;
-      }
-
-      // As a fallback, check the profiles table
+      debugPrint('Checking if admin exists...');
+      // Check the profiles table for admin users
       final result = await supabase
           .from('profiles')
           .select('id')
           .eq('role', 'admin')
           .limit(1);
 
-      return result.isNotEmpty;
+      final exists = result.isNotEmpty;
+      debugPrint('Admin check result: $exists');
+      return exists;
     } catch (e) {
       debugPrint('Error checking if admin exists: $e');
-      return false;
+      // Rethrow the error so it can be handled by the FutureBuilder
+      rethrow;
     }
   }
 
@@ -97,18 +93,6 @@ class SupabaseService {
 
         debugPrint('Creating admin profile with data: $profileData');
         await supabase.from('profiles').insert(profileData);
-
-        // Create entry in admin_settings table
-        final adminSettingsData = {
-          'admin_id': response.user!.id,
-          'admin_email': email,
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        };
-
-        debugPrint(
-            'Creating admin_settings entry with data: $adminSettingsData');
-        await supabase.from('admin_settings').insert(adminSettingsData);
 
         final userModel = UserModel(
           id: response.user!.id,
@@ -283,14 +267,6 @@ class SupabaseService {
             .eq('id', userId)
             .single();
 
-        // Create entry in admin_settings table
-        await supabase.from('admin_settings').insert({
-          'admin_id': userId,
-          'admin_email': userData['email'],
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        });
-
         debugPrint('User successfully promoted to admin');
         return true;
       }
@@ -312,7 +288,7 @@ class SupabaseService {
       // First check if this is an admin account
       final userData = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, email')
           .eq('id', adminId)
           .single();
 
@@ -324,16 +300,19 @@ class SupabaseService {
         return false;
       }
 
-      // Remove from admin_settings table first
-      await supabase.from('admin_settings').delete().eq('admin_id', adminId);
+      debugPrint('Removing admin privileges for user: ${userData['email']}');
 
-      // Delete the admin user
-      await supabase.auth.admin.deleteUser(adminId);
+      await supabase.from('profiles').update({
+        'created_by': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('created_by', adminId);
+      await supabase.from('profiles').delete().eq('id', adminId);
 
       return true;
     } catch (e) {
+      debugPrint('Error removing admin privileges: $e');
       Fluttertoast.showToast(
-        msg: "Error deleting admin account: ${e.toString()}",
+        msg: "Error removing admin privileges: ${e.toString()}",
         toastLength: Toast.LENGTH_LONG,
       );
       return false;

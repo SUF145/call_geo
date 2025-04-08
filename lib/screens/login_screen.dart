@@ -152,7 +152,33 @@ class _LoginScreenState extends State<LoginScreen> {
                 FutureBuilder<bool>(
                   future: SupabaseService().adminExists(),
                   builder: (context, snapshot) {
-                    final adminExists = snapshot.data ?? true;
+                    // Show loading indicator while checking admin status
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                        child: SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    }
+
+                    // Handle error case
+                    if (snapshot.hasError) {
+                      debugPrint(
+                          'Error checking admin exists: ${snapshot.error}');
+                      return TextButton(
+                        onPressed: () {
+                          setState(() {}); // Refresh the widget
+                        },
+                        child: const Text(
+                            'Error checking admin status. Tap to retry.'),
+                      );
+                    }
+
+                    // Get admin exists status, default to false if null
+                    final adminExists = snapshot.data ?? false;
+                    debugPrint('Admin exists check result: $adminExists');
 
                     if (adminExists) {
                       // If admin exists, just show a message about contacting admin
