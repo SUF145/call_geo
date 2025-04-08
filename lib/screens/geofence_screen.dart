@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/geofence_service.dart';
+import '../services/supabase_service.dart';
 import 'dart:async';
 
 class GeofenceScreen extends StatefulWidget {
@@ -14,114 +15,206 @@ class GeofenceScreen extends StatefulWidget {
 
 class _GeofenceScreenState extends State<GeofenceScreen> {
   final GeofenceService _geofenceService = GeofenceService();
+  final SupabaseService _supabaseService = SupabaseService();
   final Completer<GoogleMapController> _controller = Completer();
-  final TextEditingController _radiusController = TextEditingController(text: '500');
-  
+  final TextEditingController _radiusController =
+      TextEditingController(text: '500');
+
   bool _isLoading = true;
   bool _isGeofenceEnabled = false;
   bool _isEditingGeofence = false;
   double _geofenceRadius = 500; // Default radius in meters
   LatLng? _geofenceCenter;
-  
+  String? _userId;
+
   // Map circles for geofence visualization
   final Set<Circle> _circles = {};
-  
+
   // Default camera position (will be updated with current location)
   CameraPosition _initialCameraPosition = const CameraPosition(
     target: LatLng(0, 0),
     zoom: 14,
   );
-  
+
   @override
   void initState() {
     super.initState();
     _loadGeofenceSettings();
   }
-  
+
   // Load saved geofence settings
   Future<void> _loadGeofenceSettings() async {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       // Get current location for initial camera position
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high
-      );
-      
+          desiredAccuracy: LocationAccuracy.high);
+
       _initialCameraPosition = CameraPosition(
         target: LatLng(position.latitude, position.longitude),
         zoom: 14,
       );
-      
-      // Load saved geofence settings
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      bool isEnabled = prefs.getBool('geofence_enabled') ?? false;
-      double? lat = prefs.getDouble('geofence_lat');
-      double? lng = prefs.getDouble('geofence_lng');
-      double radius = prefs.getDouble('geofence_radius') ?? 500;
-      
-      if (lat != null && lng != null) {
-        _geofenceCenter = LatLng(lat, lng);
-        _geofenceRadius = radius;
-        _radiusController.text = radius.toString();
-        
+
+      // Get current user
+      final currentUser = await _supabaseService.getCurrentUser();
+      if (currentUser == null) {
+        debugPrint('No current user found');
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      _userId = currentUser.id;
+      debugPrint('Loading geofence settings for user: $_userId');
+
+      // Load geofence settings from database
+      final settings = await _supabaseService.getUserGeofenceSettings(_userId!);
+
+      if (settings != null) {
+        debugPrint(
+            'Found geofence settings: ${settings.center.latitude}, ${settings.center.longitude}, radius: ${settings.radius}, enabled: ${settings.enabled}');
+        _geofenceCenter = settings.center;
+        _geofenceRadius = settings.radius;
+        _isGeofenceEnabled = settings.enabled;
+        _radiusController.text = _geofenceRadius.toString();
+
         // Update the circle visualization
         _updateGeofenceCircle();
-        
+
         // If geofence was enabled, restart monitoring
-        if (isEnabled) {
+        if (_isGeofenceEnabled) {
           _geofenceService.setupGeofence(
             center: _geofenceCenter!,
             radiusInMeters: _geofenceRadius,
             onExit: _handleGeofenceExit,
             onEnter: _handleGeofenceEnter,
           );
-          
+
           bool success = await _geofenceService.startMonitoring();
-          setState(() {
-            _isGeofenceEnabled = success;
-          });
+          if (mounted) {
+            setState(() {
+              _isGeofenceEnabled = success;
+            });
+          }
+        }
+      } else {
+        debugPrint('No geofence settings found for user: $_userId');
+
+        // Fallback to SharedPreferences for backward compatibility
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        bool isEnabled = prefs.getBool('geofence_enabled') ?? false;
+        double? lat = prefs.getDouble('geofence_lat');
+        double? lng = prefs.getDouble('geofence_lng');
+        double radius = prefs.getDouble('geofence_radius') ?? 500;
+
+        if (lat != null && lng != null) {
+          debugPrint('Found geofence settings in SharedPreferences');
+          _geofenceCenter = LatLng(lat, lng);
+          _geofenceRadius = radius;
+          _isGeofenceEnabled = isEnabled;
+          _radiusController.text = radius.toString();
+
+          // Update the circle visualization
+          _updateGeofenceCircle();
+
+          // Save to database for future use
+          if (_userId != null && _geofenceCenter != null) {
+            await _saveGeofenceSettingsToDatabase();
+          }
+
+          // If geofence was enabled, restart monitoring
+          if (_isGeofenceEnabled) {
+            _geofenceService.setupGeofence(
+              center: _geofenceCenter!,
+              radiusInMeters: _geofenceRadius,
+              onExit: _handleGeofenceExit,
+              onEnter: _handleGeofenceEnter,
+            );
+
+            bool success = await _geofenceService.startMonitoring();
+            if (mounted) {
+              setState(() {
+                _isGeofenceEnabled = success;
+              });
+            }
+          }
         }
       }
     } catch (e) {
       debugPrint('Error loading geofence settings: $e');
     }
-    
-    setState(() {
-      _isLoading = false;
-    });
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
-  
+
   // Save geofence settings
   Future<void> _saveGeofenceSettings() async {
     if (_geofenceCenter == null) return;
-    
+
     try {
+      // Save to SharedPreferences for backward compatibility
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setBool('geofence_enabled', _isGeofenceEnabled);
       await prefs.setDouble('geofence_lat', _geofenceCenter!.latitude);
       await prefs.setDouble('geofence_lng', _geofenceCenter!.longitude);
       await prefs.setDouble('geofence_radius', _geofenceRadius);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Geofence settings saved'),
-          backgroundColor: Colors.green,
-        ),
-      );
+
+      // Save to database
+      await _saveGeofenceSettingsToDatabase();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Geofence settings saved'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('Error saving geofence settings: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to save geofence settings'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save geofence settings'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
-  
+
+  // Save geofence settings to database
+  Future<void> _saveGeofenceSettingsToDatabase() async {
+    if (_userId == null || _geofenceCenter == null) return;
+
+    try {
+      debugPrint('Saving geofence settings to database for user: $_userId');
+      final success = await _supabaseService.saveUserGeofenceSettings(
+        userId: _userId!,
+        adminId: _userId!, // Current user is the admin for their own settings
+        enabled: _isGeofenceEnabled,
+        center: _geofenceCenter!,
+        radius: _geofenceRadius,
+      );
+
+      if (success) {
+        debugPrint('Successfully saved geofence settings to database');
+      } else {
+        debugPrint('Failed to save geofence settings to database');
+      }
+    } catch (e) {
+      debugPrint('Error saving geofence settings to database: $e');
+    }
+  }
+
   // Set up geofence at the specified location
   void _setupGeofence(LatLng center) {
     // Show dialog to set radius
@@ -202,7 +295,7 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
   // Update the geofence circle visualization
   void _updateGeofenceCircle() {
     if (_geofenceCenter == null) return;
-    
+
     setState(() {
       _circles.clear();
       _circles.add(
@@ -210,7 +303,7 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
           circleId: const CircleId('geofence'),
           center: _geofenceCenter!,
           radius: _geofenceRadius,
-          fillColor: Colors.blue.withOpacity(0.2),
+          fillColor: Colors.blue.withAlpha(51), // 0.2 opacity = 51/255
           strokeColor: Colors.blue,
           strokeWidth: 2,
         ),
@@ -228,8 +321,7 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
         builder: (context) => AlertDialog(
           title: const Text('Warning!'),
           content: Text(
-            'You have left the restricted area! You are ${distanceFromCenter.toStringAsFixed(0)} meters away from the center.'
-          ),
+              'You have left the restricted area! You are ${distanceFromCenter.toStringAsFixed(0)} meters away from the center.'),
           backgroundColor: Colors.red[100],
           actions: [
             TextButton(
@@ -262,7 +354,7 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
     setState(() {
       _isEditingGeofence = !_isEditingGeofence;
     });
-    
+
     if (_isEditingGeofence) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -283,50 +375,54 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
       );
       return;
     }
-    
+
     if (_isGeofenceEnabled) {
       // Stop monitoring
       _geofenceService.stopMonitoring();
       setState(() {
         _isGeofenceEnabled = false;
       });
-      
+
       // Save the settings
       await _saveGeofenceSettings();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Geofence monitoring stopped'),
-        ),
-      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Geofence monitoring stopped'),
+          ),
+        );
+      }
     } else {
       // Start monitoring
       bool success = await _geofenceService.startMonitoring();
       setState(() {
         _isGeofenceEnabled = success;
       });
-      
+
       // Save the settings
       await _saveGeofenceSettings();
-      
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Geofence monitoring started'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to start geofence monitoring'),
-            backgroundColor: Colors.red,
-          ),
-        );
+
+      if (mounted) {
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Geofence monitoring started'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to start geofence monitoring'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -401,7 +497,9 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
-                                    color: _isGeofenceEnabled ? Colors.green : Colors.red,
+                                    color: _isGeofenceEnabled
+                                        ? Colors.green
+                                        : Colors.red,
                                   ),
                                 ),
                               ],
@@ -414,11 +512,17 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                           Expanded(
                             child: ElevatedButton.icon(
                               onPressed: _toggleGeofenceEditing,
-                              icon: Icon(_isEditingGeofence ? Icons.cancel : Icons.edit_location),
-                              label: Text(_isEditingGeofence ? 'Cancel' : 'Set Geofence'),
+                              icon: Icon(_isEditingGeofence
+                                  ? Icons.cancel
+                                  : Icons.edit_location),
+                              label: Text(_isEditingGeofence
+                                  ? 'Cancel'
+                                  : 'Set Geofence'),
                               style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                backgroundColor: _isEditingGeofence ? Colors.red : null,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                backgroundColor:
+                                    _isEditingGeofence ? Colors.red : null,
                               ),
                             ),
                           ),
@@ -426,11 +530,17 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
                           Expanded(
                             child: ElevatedButton.icon(
                               onPressed: _toggleGeofenceMonitoring,
-                              icon: Icon(_isGeofenceEnabled ? Icons.location_off : Icons.location_on),
-                              label: Text(_isGeofenceEnabled ? 'Disable' : 'Enable'),
+                              icon: Icon(_isGeofenceEnabled
+                                  ? Icons.location_off
+                                  : Icons.location_on),
+                              label: Text(
+                                  _isGeofenceEnabled ? 'Disable' : 'Enable'),
                               style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                backgroundColor: _isGeofenceEnabled ? Colors.red : Colors.green,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                backgroundColor: _isGeofenceEnabled
+                                    ? Colors.red
+                                    : Colors.green,
                               ),
                             ),
                           ),
@@ -443,7 +553,7 @@ class _GeofenceScreenState extends State<GeofenceScreen> {
             ),
     );
   }
-  
+
   @override
   void dispose() {
     _radiusController.dispose();
