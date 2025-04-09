@@ -7,6 +7,7 @@ import '../models/user_model.dart';
 import '../models/user_geofence_settings_model.dart';
 import 'location_history_screen.dart';
 import 'geofence_screen.dart';
+import 'location_spoofing_demo_screen.dart';
 
 class GeoTrackingScreen extends StatefulWidget {
   const GeoTrackingScreen({super.key});
@@ -315,6 +316,26 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),
             minimumSize: const Size(double.infinity, 0),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Location Spoofing Detection Demo Button
+        ElevatedButton.icon(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const LocationSpoofingDemoScreen(),
+              ),
+            );
+          },
+          icon: const Icon(Icons.security),
+          label: const Text('Location Spoofing Detection'),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            minimumSize: const Size(double.infinity, 0),
+            backgroundColor: Colors.purple,
           ),
         ),
 

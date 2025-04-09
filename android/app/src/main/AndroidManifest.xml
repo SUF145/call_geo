@@ -79,6 +79,13 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <!-- Enhanced location tracking service with spoofing detection -->
+        <service
+            android:name=".location.EnhancedLocationTrackingService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <!-- Receiver to restart service on boot -->
         <receiver
             android:name=".services.BootReceiver"

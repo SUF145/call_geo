@@ -6,6 +6,8 @@ import android.os.Bundle
 import android.util.Log
 import androidx.annotation.NonNull
 import com.example.call_geo.services.LocationTrackingService
+import com.example.call_geo.location.LocationTrackingManager
+import com.example.call_geo.location.LocationSpoofingDetector
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,11 +16,17 @@ class MainActivity: FlutterActivity() {
     private val TAG = "MainActivity"
     private val LOCATION_CHANNEL = "com.example.call_geo/location"
     private val MAIN_CHANNEL = "com.example.call_geo/main"
+    private val ENHANCED_LOCATION_CHANNEL = "com.example.call_geo/enhanced_location"
+
+    private lateinit var locationTrackingManager: LocationTrackingManager
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Location service channel
+        // Initialize location tracking manager
+        locationTrackingManager = LocationTrackingManager(this)
+
+        // Location service channel (original implementation)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LOCATION_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startLocationService" -> {
@@ -29,6 +37,47 @@ class MainActivity: FlutterActivity() {
                 "stopLocationService" -> {
                     val serviceStopped = stopLocationService()
                     result.success(serviceStopped)
+                }
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
+
+        // Enhanced location service channel with spoofing detection
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ENHANCED_LOCATION_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startEnhancedLocationTracking" -> {
+                    val serviceStarted = locationTrackingManager.startLocationTracking()
+                    result.success(serviceStarted)
+                }
+                "stopEnhancedLocationTracking" -> {
+                    val serviceStopped = locationTrackingManager.stopLocationTracking()
+                    result.success(serviceStopped)
+                }
+                "isEnhancedLocationTrackingRunning" -> {
+                    val isRunning = locationTrackingManager.isLocationTrackingRunning()
+                    result.success(isRunning)
+                }
+                "checkLocationSpoofing" -> {
+                    // This is a one-time check for location spoofing
+                    // It can be used to check if the device has mock location enabled
+                    // or has spoofing apps installed without starting the tracking service
+                    try {
+                        val spoofingDetector = LocationSpoofingDetector(this)
+                        val hasMockLocationEnabled = spoofingDetector.isMockLocationEnabled()
+                        val hasSpoofingApps = spoofingDetector.hasSpoofingAppsInstalled()
+
+                        val resultMap = mapOf(
+                            "mockLocationEnabled" to hasMockLocationEnabled,
+                            "spoofingAppsInstalled" to hasSpoofingApps
+                        )
+
+                        result.success(resultMap)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error checking location spoofing", e)
+                        result.error("SPOOFING_CHECK_ERROR", e.message, null)
+                    }
                 }
                 else -> {
                     result.notImplemented()
