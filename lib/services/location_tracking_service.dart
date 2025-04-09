@@ -8,9 +8,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:vibration/vibration.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../models/location_model.dart';
+import '../models/user_geofence_settings_model.dart';
 import 'supabase_service.dart';
+
+// Store the last time we showed a geofence alert to avoid spamming
+DateTime? _lastGeofenceAlertTime;
 
 /// Callback function that will be called in the background isolate
 @pragma('vm:entry-point')
@@ -37,8 +45,26 @@ void locationTrackingCallback() async {
         final Map<dynamic, dynamic> locationData = call.arguments;
         debugPrint('Location update received in background: $locationData');
 
+        // Create a Position object from the location data
+        final Position position = Position(
+          latitude: locationData['latitude'] as double,
+          longitude: locationData['longitude'] as double,
+          timestamp: DateTime.fromMillisecondsSinceEpoch(
+              (locationData['time'] as int).toInt()),
+          accuracy: locationData['accuracy'] as double,
+          altitude: locationData['altitude'] as double,
+          heading: 0.0,
+          speed: locationData['speed'] as double,
+          speedAccuracy: 0.0,
+          altitudeAccuracy: 0.0,
+          headingAccuracy: 0.0,
+        );
+
         // Save location to database
         await _saveLocationToDatabase(locationData);
+
+        // Check if user is within geofence
+        await _checkGeofence(position);
       } catch (e) {
         debugPrint('Error handling location update: $e');
       }
@@ -120,6 +146,110 @@ Future<void> _saveLocationToDatabase(Map<dynamic, dynamic> locationData) async {
     debugPrint('Location saved to database');
   } catch (e) {
     debugPrint('Error saving location to database: $e');
+  }
+}
+
+// Check if the user is within their geofence
+Future<void> _checkGeofence(Position position) async {
+  try {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+
+    if (user == null) {
+      debugPrint('No authenticated user found for geofence check');
+      return;
+    }
+
+    // Load user's geofence settings
+    final response = await supabase
+        .from('user_geofence_settings')
+        .select()
+        .eq('user_id', user.id)
+        .eq('enabled', true)
+        .maybeSingle();
+
+    if (response == null) {
+      debugPrint('No geofence settings found for user ${user.id}');
+      return;
+    }
+
+    // Parse geofence settings
+    final settings = UserGeofenceSettings.fromJson(response);
+    debugPrint(
+        'Found geofence settings for user ${user.id}: ${settings.center.latitude}, ${settings.center.longitude}, radius: ${settings.radius}, enabled: ${settings.enabled}');
+
+    if (!settings.enabled) {
+      debugPrint('Geofence is disabled for user ${user.id}');
+      return;
+    }
+
+    // Calculate distance from geofence center
+    final double distanceInMeters = Geolocator.distanceBetween(
+      settings.center.latitude,
+      settings.center.longitude,
+      position.latitude,
+      position.longitude,
+    );
+
+    final bool isInsideGeofence = distanceInMeters <= settings.radius;
+    debugPrint(
+        'User is ${isInsideGeofence ? "inside" : "outside"} geofence. Distance: ${distanceInMeters.toStringAsFixed(2)}m');
+
+    // If user is outside geofence, show alert
+    if (!isInsideGeofence) {
+      // Check if we should show an alert (only once per minute)
+      final now = DateTime.now();
+      if (_lastGeofenceAlertTime == null ||
+          now.difference(_lastGeofenceAlertTime!).inMinutes >= 1) {
+        _lastGeofenceAlertTime = now;
+        await _showGeofenceAlert(distanceInMeters);
+      }
+    }
+  } catch (e) {
+    debugPrint('Error checking geofence: $e');
+  }
+}
+
+// Show alert when user is outside geofence
+Future<void> _showGeofenceAlert(double distanceFromCenter) async {
+  try {
+    // Vibrate the device
+    if (await Vibration.hasVibrator() ?? false) {
+      Vibration.vibrate(duration: 1000);
+    }
+
+    // Show toast notification
+    // Note: This might not work in the background isolate
+    // We'll rely on the native notification instead
+    try {
+      Fluttertoast.showToast(
+        msg:
+            "Warning: You are outside the allowed area! Please return immediately.",
+        toastLength: Toast.LENGTH_LONG,
+        gravity: ToastGravity.CENTER,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+        fontSize: 16.0,
+      );
+    } catch (e) {
+      debugPrint('Error showing toast: $e');
+    }
+
+    // Send a notification using the platform channel
+    const MethodChannel backgroundChannel =
+        MethodChannel('com.example.call_geo/location_background');
+
+    try {
+      await backgroundChannel.invokeMethod('showGeofenceAlert', {
+        'distance': distanceFromCenter,
+        'message':
+            'You are outside the allowed area! Please return immediately.',
+      });
+    } catch (e) {
+      debugPrint('Error sending notification: $e');
+    }
+  } catch (e) {
+    debugPrint('Error showing geofence alert: $e');
   }
 }
 

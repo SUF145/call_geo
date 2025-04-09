@@ -181,6 +181,23 @@ public class LocationTrackingService extends Service {
 
         // Create a MethodChannel for communicating with Dart
         backgroundChannel = new MethodChannel(backgroundEngine.getDartExecutor().getBinaryMessenger(), "com.example.call_geo/location_background");
+
+        // Set up method call handler for geofence alerts
+        backgroundChannel.setMethodCallHandler((call, result) -> {
+            if (call.method.equals("showGeofenceAlert")) {
+                try {
+                    Double distance = call.argument("distance");
+                    String message = call.argument("message");
+                    showGeofenceNotification(distance, message);
+                    result.success(true);
+                } catch (Exception e) {
+                    Log.e(TAG, "Error showing geofence notification: " + e.getMessage());
+                    result.error("NOTIFICATION_ERROR", e.getMessage(), null);
+                }
+            } else {
+                result.notImplemented();
+            }
+        });
     }
 
     private void sendLocationToFlutter(Location location) {
@@ -205,6 +222,51 @@ public class LocationTrackingService extends Service {
             backgroundChannel.invokeMethod("onLocationUpdate", locationData);
         } catch (Exception e) {
             Log.e(TAG, "Error sending location to Flutter: " + e.getMessage());
+        }
+    }
+
+    // Show a notification when the user is outside the geofence
+    private void showGeofenceNotification(Double distance, String message) {
+        // Create a notification channel for geofence alerts (if not already created)
+        String channelId = "GeofenceAlertChannel";
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    "Geofence Alerts",
+                    NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("Alerts when you leave your allowed area");
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[]{0, 1000, 500, 1000});
+
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+
+        // Create an intent to open the app when the notification is tapped
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+
+        // Build the notification
+        Notification notification = new NotificationCompat.Builder(this, channelId)
+                .setContentTitle("⚠️ Geofence Alert")
+                .setContentText(message)
+                .setStyle(new NotificationCompat.BigTextStyle()
+                        .bigText(message + " You are approximately " + Math.round(distance) + " meters outside your allowed area."))
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setVibrate(new long[]{0, 1000, 500, 1000})
+                .build();
+
+        // Show the notification
+        NotificationManager notificationManager = getSystemService(NotificationManager.class);
+        if (notificationManager != null) {
+            // Use a different ID than the foreground service notification
+            notificationManager.notify(2, notification);
         }
     }
 }
