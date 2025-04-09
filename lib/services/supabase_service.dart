@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -197,6 +199,20 @@ class SupabaseService {
         // Save the FCM token to Supabase
         final firebaseMessagingService = FirebaseMessagingService();
         await firebaseMessagingService.initialize();
+
+        // Explicitly save the FCM token to Supabase
+        final token = await firebaseMessagingService.getToken();
+        if (token != null) {
+          debugPrint('Saving FCM token for user ${response.user!.id}: $token');
+          await supabase.from('device_tokens').upsert({
+            'user_id': response.user!.id,
+            'token': token,
+            'device_type': Platform.isAndroid ? 'android' : 'ios',
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+          debugPrint(
+              'FCM token saved to Supabase for user ${response.user!.id}');
+        }
 
         return userModel;
       }

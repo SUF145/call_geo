@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -210,6 +211,8 @@ Future<void> _checkGeofence(Position position) async {
         final SupabaseService supabaseService = SupabaseService();
         final adminUser = await supabaseService.getCreatorAdmin(user.id);
 
+        debugPrint('Admin user details: ${adminUser?.toJson()}');
+
         // Get user's name for the admin notification
         final userData = await supabase
             .from('profiles')
@@ -256,31 +259,95 @@ Future<void> _checkGeofence(Position position) async {
               'Sending notification to admin device for ${adminUser.id}');
 
           try {
-            // Use Firebase Messaging Service to send a notification to the admin's device
-            final FirebaseMessagingService firebaseMessagingService =
-                FirebaseMessagingService();
+            debugPrint('Admin user ID: ${adminUser.id}');
+            debugPrint('Admin email: ${adminUser.email}');
+            debugPrint('Admin role: ${adminUser.role}');
+
+            // Initialize Firebase if needed
+            try {
+              await Firebase.initializeApp();
+              debugPrint(
+                  'Firebase initialized successfully in location service');
+            } catch (e) {
+              debugPrint('Error initializing Firebase: $e');
+              // Continue anyway, as Firebase might already be initialized
+            }
 
             // Create the admin notification message
             final String title = "User Outside Geofence Alert";
             final String message =
                 "$userName is outside their allowed area! They are approximately ${distanceInMeters.toStringAsFixed(0)} meters from the boundary.";
 
-            // Send the notification to the admin's device
-            final bool success =
-                await firebaseMessagingService.sendNotificationToUser(
-              adminUser.id,
-              title,
-              message,
-              isAdminNotification: true,
-              targetUserId: user.id,
-            );
+            // Use Firebase Messaging Service to send a notification to the admin's device
+            final FirebaseMessagingService firebaseMessagingService =
+                FirebaseMessagingService();
+            await firebaseMessagingService.initialize();
 
-            if (success) {
-              debugPrint(
-                  'Cross-device notification sent to admin ${adminUser.id}');
-            } else {
-              debugPrint(
-                  'Failed to send cross-device notification to admin ${adminUser.id}');
+            // Get the admin's device token directly from the database
+            try {
+              // Get the admin's device token using a direct query
+              final adminTokens = await supabaseService.supabase
+                  .from('device_tokens')
+                  .select()
+                  .eq('user_id', adminUser.id);
+
+              debugPrint('Admin token query response: $adminTokens');
+
+              if (adminTokens.isEmpty) {
+                debugPrint('No device tokens found for admin: ${adminUser.id}');
+
+                // Try to get all tokens to see what's in the database
+                final allTokens = await supabaseService.supabase
+                    .from('device_tokens')
+                    .select();
+                debugPrint('All tokens in the table: $allTokens');
+                debugPrint('Total tokens in the table: ${allTokens.length}');
+
+                // Try to send the notification anyway
+                final bool success =
+                    await firebaseMessagingService.sendNotificationToUser(
+                  adminUser.id,
+                  title,
+                  message,
+                  isAdminNotification: true,
+                  targetUserId: user.id,
+                );
+
+                if (success) {
+                  debugPrint(
+                      'Cross-device notification sent to admin ${adminUser.id}');
+                } else {
+                  debugPrint(
+                      'Failed to send cross-device notification to admin ${adminUser.id}');
+                }
+              } else {
+                // We have the admin's token, send the notification directly
+                final List<String> tokens = adminTokens
+                    .map<String>((data) => data['token'] as String)
+                    .toList();
+                debugPrint(
+                    'Found ${tokens.length} tokens for admin ${adminUser.id}: $tokens');
+
+                // Use the Firebase Messaging Service instead of FCM v1 API
+                final bool success =
+                    await firebaseMessagingService.sendNotificationToUser(
+                  adminUser.id,
+                  title,
+                  message,
+                  isAdminNotification: true,
+                  targetUserId: user.id,
+                );
+
+                if (success) {
+                  debugPrint(
+                      'Cross-device notification sent to admin ${adminUser.id}');
+                } else {
+                  debugPrint(
+                      'Failed to send cross-device notification to admin ${adminUser.id}');
+                }
+              }
+            } catch (e) {
+              debugPrint('Error sending notification to admin: $e');
             }
           } catch (e) {
             debugPrint('Error sending cross-device notification: $e');

@@ -1,17 +1,46 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
+import '../services/firebase_messaging_service_new.dart';
 import '../models/user_model.dart';
 import 'login_screen.dart';
 import 'user_management_screen.dart';
 import 'geofence_screen.dart';
 
-class AdminHomeScreen extends StatelessWidget {
+class AdminHomeScreen extends StatefulWidget {
   final UserModel admin;
 
   const AdminHomeScreen({
     Key? key,
     required this.admin,
   }) : super(key: key);
+
+  @override
+  State<AdminHomeScreen> createState() => _AdminHomeScreenState();
+}
+
+class _AdminHomeScreenState extends State<AdminHomeScreen> {
+  late UserModel admin;
+
+  @override
+  void initState() {
+    super.initState();
+    admin = widget.admin;
+    _saveAdminFCMToken();
+  }
+
+  Future<void> _saveAdminFCMToken() async {
+    try {
+      final firebaseMessagingService = FirebaseMessagingService();
+      await firebaseMessagingService.initialize();
+      final token = await firebaseMessagingService.getToken();
+      if (token != null) {
+        debugPrint('Manually saving FCM token for admin ${admin.id}: $token');
+        await firebaseMessagingService.saveTokenForUser(admin.id, token);
+      }
+    } catch (e) {
+      debugPrint('Error saving admin FCM token: $e');
+    }
+  }
 
   Future<void> _signOut(BuildContext context) async {
     await SupabaseService().signOut();

@@ -112,10 +112,24 @@ class FirebaseMessagingService {
     }
   }
 
+  // Get the FCM token
+  Future<String?> getToken() async {
+    try {
+      final String? token = await _firebaseMessaging.getToken();
+      if (token == null) {
+        debugPrint('Failed to get FCM token');
+      }
+      return token;
+    } catch (e) {
+      debugPrint('Error getting FCM token: $e');
+      return null;
+    }
+  }
+
   // Save the FCM token to Supabase
   Future<void> _saveTokenToSupabase([String? newToken]) async {
     try {
-      final String? token = newToken ?? await _firebaseMessaging.getToken();
+      final String? token = newToken ?? await getToken();
       if (token == null) {
         debugPrint('Failed to get FCM token');
         return;
@@ -130,13 +144,47 @@ class FirebaseMessagingService {
         return;
       }
 
-      // Save the token to Supabase
-      await _supabaseService.supabase.from('device_tokens').upsert({
-        'user_id': user.id,
-        'token': token,
-        'device_type': Platform.isAndroid ? 'android' : 'ios',
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      // Save token for the current user
+      await saveTokenForUser(user.id, token);
+    } catch (e) {
+      debugPrint('Error saving FCM token: $e');
+    }
+  }
+
+  // Save a token for a specific user
+  Future<void> saveTokenForUser(String userId, String token) async {
+    try {
+      debugPrint('Saving token for user: $userId');
+      debugPrint('Token: $token');
+      // Check if this token already exists for this user
+      final existingTokens = await _supabaseService.supabase
+          .from('device_tokens')
+          .select()
+          .eq('user_id', userId)
+          .eq('token', token);
+
+      if (existingTokens.isNotEmpty) {
+        // Token exists, update it
+        debugPrint('Updating existing FCM token');
+        await _supabaseService.supabase
+            .from('device_tokens')
+            .update({
+              'device_type': Platform.isAndroid ? 'android' : 'ios',
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('user_id', userId)
+            .eq('token', token);
+      } else {
+        // Token doesn't exist, insert it
+        debugPrint('Inserting new FCM token');
+        await _supabaseService.supabase.from('device_tokens').insert({
+          'user_id': userId,
+          'token': token,
+          'device_type': Platform.isAndroid ? 'android' : 'ios',
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+      }
 
       debugPrint('FCM token saved to Supabase');
     } catch (e) {
@@ -160,21 +208,43 @@ class FirebaseMessagingService {
       debugPrint('Target user ID: $targetUserId');
 
       // Get the user's device tokens
-      final response = await _supabaseService.supabase
-          .from('device_tokens')
-          .select()
-          .eq('user_id', userId);
+      debugPrint('Querying device_tokens table for user_id: $userId');
+      List<dynamic> tokenResponse;
+      try {
+        // For all notifications, use the standard query
+        final response = await _supabaseService.supabase
+            .from('device_tokens')
+            .select()
+            .eq('user_id', userId);
 
-      if (response.isEmpty) {
-        debugPrint('No device tokens found for user: $userId');
+        debugPrint('Query response: $response');
+
+        if (response.isEmpty) {
+          debugPrint('No device tokens found for user: $userId');
+
+          // Let's try to get all tokens to see if the table has any data
+          final allTokens =
+              await _supabaseService.supabase.from('device_tokens').select();
+
+          debugPrint('All tokens in the table: $allTokens');
+          debugPrint('Total tokens in the table: ${allTokens.length}');
+
+          return false;
+        }
+
+        // Store the response for use outside the try block
+        tokenResponse = response;
+      } catch (e) {
+        debugPrint('Error querying device tokens: $e');
         return false;
       }
 
-      debugPrint('Found ${response.length} device tokens for user: $userId');
+      debugPrint(
+          'Found ${tokenResponse.length} device tokens for user: $userId');
 
       // Extract the tokens
       final List<String> tokens =
-          response.map<String>((data) => data['token'] as String).toList();
+          tokenResponse.map<String>((data) => data['token'] as String).toList();
 
       // Create the notification data
       final Map<String, dynamic> data = {
