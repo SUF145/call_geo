@@ -79,16 +79,62 @@ class NotificationService {
         return false;
       }
 
-      // Save the token to Supabase
-      await _supabaseService.supabase.from('device_tokens').upsert({
-        'user_id': user.id,
-        'token': token,
-        'device_type': 'android', // For simplicity, we're assuming Android
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      try {
+        // First check if this token already exists for this user
+        final existingTokens = await _supabaseService.supabase
+            .from('device_tokens')
+            .select()
+            .eq('user_id', user.id)
+            .eq('token', token);
 
-      debugPrint('Device token stored in Supabase: $token');
-      return true;
+        if (existingTokens.isNotEmpty) {
+          // Token exists, update it
+          debugPrint('Updating existing FCM token');
+          await _supabaseService.supabase
+              .from('device_tokens')
+              .update({
+                'device_type':
+                    'android', // For simplicity, we're assuming Android
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('user_id', user.id)
+              .eq('token', token);
+        } else {
+          // Check if user has any other tokens
+          final userTokens = await _supabaseService.supabase
+              .from('device_tokens')
+              .select()
+              .eq('user_id', user.id);
+
+          if (userTokens.isNotEmpty) {
+            // User has other tokens, update the first one
+            debugPrint('Updating user\'s existing token with new token');
+            await _supabaseService.supabase.from('device_tokens').update({
+              'token': token,
+              'device_type':
+                  'android', // For simplicity, we're assuming Android
+              'updated_at': DateTime.now().toIso8601String(),
+            }).eq('id', userTokens[0]['id']);
+          } else {
+            // Token doesn't exist, insert it
+            debugPrint('Inserting new FCM token');
+            await _supabaseService.supabase.from('device_tokens').insert({
+              'user_id': user.id,
+              'token': token,
+              'device_type':
+                  'android', // For simplicity, we're assuming Android
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            });
+          }
+        }
+
+        debugPrint('Device token stored in Supabase: $token');
+        return true;
+      } catch (e) {
+        debugPrint('Error saving FCM token: $e');
+        return false;
+      }
     } catch (e) {
       debugPrint('Error storing device token: $e');
       return false;

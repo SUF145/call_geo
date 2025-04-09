@@ -12,7 +12,9 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:vibration/vibration.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:uuid/uuid.dart';
 import 'firebase_messaging_service_new.dart';
+import 'firebase_cloud_messaging_v1.dart';
 
 import '../models/location_model.dart';
 import '../models/user_geofence_settings_model.dart';
@@ -131,8 +133,12 @@ Future<void> _saveLocationToDatabase(Map<dynamic, dynamic> locationData) async {
       return;
     }
 
+    // Generate a UUID for the location
+    final uuid = Uuid();
+    final locationId = uuid.v4();
+
     final location = LocationModel(
-      id: '',
+      id: locationId, // Use the generated UUID
       userId: user.id,
       latitude: locationData['latitude'],
       longitude: locationData['longitude'],
@@ -321,24 +327,41 @@ Future<void> _checkGeofence(Position position) async {
                       'Failed to send cross-device notification to admin ${adminUser.id}');
                 }
               } else {
-                // We have the admin's token, send the notification directly
+                // We have the admin's token, send the notification directly using FCM V1 API
                 final List<String> tokens = adminTokens
                     .map<String>((data) => data['token'] as String)
                     .toList();
                 debugPrint(
                     'Found ${tokens.length} tokens for admin ${adminUser.id}: $tokens');
 
-                // Use the Firebase Messaging Service instead of FCM v1 API
-                final bool success =
-                    await firebaseMessagingService.sendNotificationToUser(
-                  adminUser.id,
-                  title,
-                  message,
-                  isAdminNotification: true,
-                  targetUserId: user.id,
-                );
+                // Use the Firebase Cloud Messaging V1 API directly
+                final FirebaseCloudMessagingV1 fcmV1 =
+                    FirebaseCloudMessagingV1();
 
-                if (success) {
+                // Send to each token individually
+                bool anySuccess = false;
+                for (final token in tokens) {
+                  debugPrint('Sending direct notification to token: $token');
+                  final bool tokenSuccess = await fcmV1.sendNotificationToToken(
+                    token,
+                    title,
+                    message,
+                    {
+                      'is_admin_notification': 'true',
+                      'user_id': user.id,
+                    },
+                  );
+
+                  if (tokenSuccess) {
+                    anySuccess = true;
+                    debugPrint(
+                        'Successfully sent notification to token: $token');
+                  } else {
+                    debugPrint('Failed to send notification to token: $token');
+                  }
+                }
+
+                if (anySuccess) {
                   debugPrint(
                       'Cross-device notification sent to admin ${adminUser.id}');
                 } else {

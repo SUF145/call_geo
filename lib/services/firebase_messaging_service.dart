@@ -6,8 +6,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'supabase_service.dart';
+import 'firebase_cloud_messaging_v1.dart';
 
 // Define a top-level function to handle background messages
 @pragma('vm:entry-point')
@@ -279,41 +281,33 @@ class FirebaseMessagingService {
     String? userId,
   }) async {
     try {
-      // This would normally use a server to send the notification
-      // For testing purposes, we'll simulate this with a direct FCM API call
-      // In a production app, this should be done from a secure server
+      // Use the Firebase Cloud Messaging V1 API
+      final FirebaseCloudMessagingV1 fcmV1 = FirebaseCloudMessagingV1();
 
-      // For now, we'll just log the message
-      debugPrint('Would send FCM message to token: $token');
+      // Log the message details
+      debugPrint('Sending FCM message to token: $token');
       debugPrint('Title: $title');
       debugPrint('Message: $message');
       debugPrint('Is admin notification: $isAdminNotification');
       debugPrint('User ID: $userId');
 
-      // In a real implementation, you would use your server to send the notification
-      // The following code is for illustration only and won't work without a server key
-      /*
-      final response = await http.post(
-        Uri.parse('https://fcm.googleapis.com/fcm/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'key=YOUR_SERVER_KEY',
-        },
-        body: json.encode({
-          'to': token,
-          'data': {
-            'title': title,
-            'message': message,
-            'is_admin_notification': isAdminNotification.toString(),
-            'user_id': userId,
-          },
-        }),
+      // Create a simple data payload
+      final Map<String, dynamic> data = {
+        'is_admin_notification': isAdminNotification.toString(),
+      };
+
+      // Only include userId if it's provided and this is an admin notification
+      if (isAdminNotification && userId != null) {
+        data['user_id'] = userId;
+      }
+
+      // Send the notification using the V1 API
+      return await fcmV1.sendNotificationToToken(
+        token,
+        title,
+        message,
+        data,
       );
-
-      return response.statusCode == 200;
-      */
-
-      return true; // Simulating success
     } catch (e) {
       debugPrint('Error sending FCM message: $e');
       return false;

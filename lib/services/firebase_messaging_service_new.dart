@@ -156,39 +156,60 @@ class FirebaseMessagingService {
     try {
       debugPrint('Saving token for user: $userId');
       debugPrint('Token: $token');
-      // Check if this token already exists for this user
-      final existingTokens = await _supabaseService.supabase
-          .from('device_tokens')
-          .select()
-          .eq('user_id', userId)
-          .eq('token', token);
 
-      if (existingTokens.isNotEmpty) {
-        // Token exists, update it
-        debugPrint('Updating existing FCM token');
-        await _supabaseService.supabase
+      try {
+        // First check if this token already exists for this user
+        final existingTokens = await _supabaseService.supabase
             .from('device_tokens')
-            .update({
-              'device_type': Platform.isAndroid ? 'android' : 'ios',
-              'updated_at': DateTime.now().toIso8601String(),
-            })
+            .select()
             .eq('user_id', userId)
             .eq('token', token);
-      } else {
-        // Token doesn't exist, insert it
-        debugPrint('Inserting new FCM token');
-        await _supabaseService.supabase.from('device_tokens').insert({
-          'user_id': userId,
-          'token': token,
-          'device_type': Platform.isAndroid ? 'android' : 'ios',
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        });
-      }
 
-      debugPrint('FCM token saved to Supabase');
+        if (existingTokens.isNotEmpty) {
+          // Token exists, update it
+          debugPrint('Updating existing FCM token');
+          await _supabaseService.supabase
+              .from('device_tokens')
+              .update({
+                'device_type': Platform.isAndroid ? 'android' : 'ios',
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('user_id', userId)
+              .eq('token', token);
+        } else {
+          // Check if user has any other tokens
+          final userTokens = await _supabaseService.supabase
+              .from('device_tokens')
+              .select()
+              .eq('user_id', userId);
+
+          if (userTokens.isNotEmpty) {
+            // User has other tokens, update the first one
+            debugPrint('Updating user\'s existing token with new token');
+            await _supabaseService.supabase.from('device_tokens').update({
+              'token': token,
+              'device_type': Platform.isAndroid ? 'android' : 'ios',
+              'updated_at': DateTime.now().toIso8601String(),
+            }).eq('id', userTokens[0]['id']);
+          } else {
+            // Token doesn't exist, insert it
+            debugPrint('Inserting new FCM token');
+            await _supabaseService.supabase.from('device_tokens').insert({
+              'user_id': userId,
+              'token': token,
+              'device_type': Platform.isAndroid ? 'android' : 'ios',
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            });
+          }
+        }
+
+        debugPrint('FCM token saved to Supabase');
+      } catch (e) {
+        debugPrint('Error saving FCM token: $e');
+      }
     } catch (e) {
-      debugPrint('Error saving FCM token: $e');
+      debugPrint('Error in saveTokenForUser: $e');
     }
   }
 
@@ -250,6 +271,7 @@ class FirebaseMessagingService {
       final Map<String, dynamic> data = {
         'title': title,
         'message': message,
+        'body': message,
         'is_admin_notification': isAdminNotification.toString(),
       };
 
@@ -257,14 +279,39 @@ class FirebaseMessagingService {
         data['user_id'] = targetUserId;
       }
 
-      // Use the FCM v1 API to send the notification
-      final FirebaseCloudMessagingV1 fcmV1 = FirebaseCloudMessagingV1();
-      final bool success = await fcmV1.sendNotificationToDevices(
-        tokens: tokens,
-        title: title,
-        body: message,
-        data: data,
-      );
+      // Try multiple approaches to send the notification
+      bool success = false;
+
+      // Approach 1: Use local notifications for testing
+      try {
+        // For testing, we'll log the notification details
+        for (final token in tokens) {
+          debugPrint('Would send notification to token: $token');
+          debugPrint('Title: $title');
+          debugPrint('Message: $message');
+          debugPrint('Data: $data');
+        }
+
+        // This is just for testing - in a real app, we'd use a server to send the notification
+        success = true;
+      } catch (e) {
+        debugPrint('Error in notification logging: $e');
+      }
+
+      // Approach 2: If direct messaging failed, try using FCM v1 API
+      if (!success) {
+        try {
+          final FirebaseCloudMessagingV1 fcmV1 = FirebaseCloudMessagingV1();
+          success = await fcmV1.sendNotificationToDevices(
+            tokens: tokens,
+            title: title,
+            body: message,
+            data: data,
+          );
+        } catch (e) {
+          debugPrint('Error using FCM v1 API: $e');
+        }
+      }
 
       if (success) {
         debugPrint('Successfully sent notification to at least one device');

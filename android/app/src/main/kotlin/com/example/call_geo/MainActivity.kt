@@ -99,11 +99,44 @@ class MainActivity: FlutterActivity() {
 
             if (viewUserLocation && userId != null) {
                 Log.d(TAG, "Received intent to view user location: $userId")
-                // Pass this information to Flutter when the engine is ready
+
+                // Wait for Flutter engine to be ready before sending the navigation command
+                // This is important for cold starts where the Flutter engine might not be ready yet
+                try {
+                    // Pass this information to Flutter when the engine is ready
+                    if (flutterEngine != null) {
+                        Log.d(TAG, "Flutter engine is ready, sending navigation command")
+                        MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, MAIN_CHANNEL)
+                            .invokeMethod("navigateToUserLocation", userId)
+                    } else {
+                        Log.d(TAG, "Flutter engine not ready, will try again when it's ready")
+                        // Store the intent data to process when the engine is ready
+                        pendingUserId = userId
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error sending navigation command: ${e.message}")
+                }
+            }
+        }
+    }
+
+    // Store pending user ID for navigation
+    private var pendingUserId: String? = null
+
+    override fun onResume() {
+        super.onResume()
+
+        // Check if we have a pending navigation request
+        pendingUserId?.let { userId ->
+            Log.d(TAG, "Processing pending navigation request for user: $userId")
+            try {
                 flutterEngine?.let { engine ->
                     MethodChannel(engine.dartExecutor.binaryMessenger, MAIN_CHANNEL)
                         .invokeMethod("navigateToUserLocation", userId)
+                    pendingUserId = null
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing pending navigation: ${e.message}")
             }
         }
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
@@ -72,6 +73,53 @@ class _MyAppState extends State<MyApp> {
     // Set up method channel to handle navigation from native code
     const MethodChannel channel = MethodChannel('com.example.call_geo/main');
     channel.setMethodCallHandler(_handleMethodCall);
+
+    // Set up Firebase Messaging handlers
+    _setupFirebaseMessaging();
+  }
+
+  // Set up Firebase Messaging handlers
+  void _setupFirebaseMessaging() {
+    // Handle notification when app is opened from a terminated state
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((RemoteMessage? message) {
+      if (message != null) {
+        debugPrint(
+            'App opened from terminated state with message: ${message.data}');
+        _handleNotificationData(message.data);
+      }
+    });
+
+    // Handle notification when app is in the background
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint(
+          'App opened from background state with message: ${message.data}');
+      _handleNotificationData(message.data);
+    });
+
+    // Handle notification when app is in the foreground
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint(
+          'Received message while app was in foreground: ${message.data}');
+      // No need to navigate here as the notification will be shown by the system
+    });
+  }
+
+  // Handle notification data
+  void _handleNotificationData(Map<String, dynamic> data) {
+    final bool isAdminNotification =
+        data['is_admin_notification']?.toString() == 'true';
+    final String? userId = data['user_id'];
+
+    debugPrint('Handling notification data: $data');
+    debugPrint('Is admin notification: $isAdminNotification');
+    debugPrint('User ID: $userId');
+
+    if (isAdminNotification && userId != null) {
+      // Navigate to the user location screen
+      _navigateToUserLocation(userId);
+    }
   }
 
   // Handle method calls from native code

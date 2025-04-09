@@ -86,7 +86,8 @@ class FirebaseCloudMessagingV1 {
       // Get an access token
       final String accessToken = await _getAccessToken();
 
-      // Create the FCM message
+      // Create an extremely simple message structure that matches what works in the Firebase Console
+      // This is the bare minimum needed for a notification to be delivered
       final Map<String, dynamic> message = {
         'message': {
           'token': token,
@@ -94,7 +95,6 @@ class FirebaseCloudMessagingV1 {
             'title': title,
             'body': body,
           },
-          'data': data ?? {},
         },
       };
 
