@@ -39,11 +39,11 @@ public class LocationTrackingService extends Service {
     private static final String TAG = "LocationTrackingService";
     private static final String CHANNEL_ID = "LocationTrackingServiceChannel";
     private static final int NOTIFICATION_ID = 1;
-    
+
     private FusedLocationProviderClient fusedLocationClient;
     private LocationCallback locationCallback;
     private LocationRequest locationRequest;
-    
+
     // For Flutter background execution
     private static MethodChannel backgroundChannel;
     private static FlutterEngine backgroundEngine;
@@ -53,26 +53,26 @@ public class LocationTrackingService extends Service {
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "onCreate: LocationTrackingService started");
-        
+
         createNotificationChannel();
         startForeground(NOTIFICATION_ID, createNotification());
-        
+
         setupLocationTracking();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "onStartCommand: LocationTrackingService");
-        
+
         if (intent != null && intent.hasExtra("callbackHandle")) {
             callbackHandle = intent.getLongExtra("callbackHandle", 0);
             Log.d(TAG, "Received callback handle: " + callbackHandle);
-            
+
             if (backgroundEngine == null) {
                 startBackgroundIsolate();
             }
         }
-        
+
         return START_STICKY;
     }
 
@@ -80,7 +80,7 @@ public class LocationTrackingService extends Service {
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "onDestroy: LocationTrackingService");
-        
+
         if (fusedLocationClient != null && locationCallback != null) {
             fusedLocationClient.removeLocationUpdates(locationCallback);
         }
@@ -101,7 +101,7 @@ public class LocationTrackingService extends Service {
             );
             serviceChannel.setDescription("Used for tracking your location in the background");
             serviceChannel.setShowBadge(false);
-            
+
             NotificationManager manager = getSystemService(NotificationManager.class);
             if (manager != null) {
                 manager.createNotificationChannel(serviceChannel);
@@ -125,7 +125,7 @@ public class LocationTrackingService extends Service {
 
     private void setupLocationTracking() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-        
+
         locationRequest = new LocationRequest.Builder(60000) // 60 seconds interval
                 .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
                 .setMinUpdateIntervalMillis(30000) // 30 seconds minimum
@@ -137,7 +137,7 @@ public class LocationTrackingService extends Service {
                 if (locationResult == null) {
                     return;
                 }
-                
+
                 for (Location location : locationResult.getLocations()) {
                     Log.d(TAG, "Location update: " + location.getLatitude() + ", " + location.getLongitude());
                     sendLocationToFlutter(location);
@@ -152,24 +152,24 @@ public class LocationTrackingService extends Service {
             Log.e(TAG, "Lost location permission: " + e.getMessage());
         }
     }
-    
+
     private void startBackgroundIsolate() {
         if (backgroundEngine != null) {
             return;
         }
-        
+
         FlutterMain.ensureInitializationComplete(getApplicationContext(), null);
         FlutterCallbackInformation callbackInfo = FlutterCallbackInformation.lookupCallbackInformation(callbackHandle);
         if (callbackInfo == null) {
             Log.e(TAG, "Callback handle not found");
             return;
         }
-        
+
         backgroundEngine = new FlutterEngine(this);
-        
+
         // Register plugins used by the background service
         new ShimPluginRegistry(backgroundEngine).registrarFor("plugins.flutter.io/path_provider");
-        
+
         // Start executing Dart code in the background
         backgroundEngine.getDartExecutor().executeDartCallback(
                 new DartExecutor.DartCallback(
@@ -178,17 +178,17 @@ public class LocationTrackingService extends Service {
                         callbackInfo
                 )
         );
-        
+
         // Create a MethodChannel for communicating with Dart
         backgroundChannel = new MethodChannel(backgroundEngine.getDartExecutor().getBinaryMessenger(), "com.example.call_geo/location_background");
     }
-    
+
     private void sendLocationToFlutter(Location location) {
         if (backgroundChannel == null) {
             Log.e(TAG, "Background channel not initialized");
             return;
         }
-        
+
         Map<String, Object> locationData = new HashMap<>();
         locationData.put("latitude", location.getLatitude());
         locationData.put("longitude", location.getLongitude());
@@ -196,8 +196,12 @@ public class LocationTrackingService extends Service {
         locationData.put("altitude", location.getAltitude());
         locationData.put("speed", location.getSpeed());
         locationData.put("time", location.getTime());
-        
+
         try {
+            // Log the location data before sending it to Flutter
+            Log.d(TAG, "Location update: " + location.getLatitude() + ", " + location.getLongitude());
+
+            // Send the location data to Flutter
             backgroundChannel.invokeMethod("onLocationUpdate", locationData);
         } catch (Exception e) {
             Log.e(TAG, "Error sending location to Flutter: " + e.getMessage());

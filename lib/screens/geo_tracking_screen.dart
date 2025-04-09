@@ -198,7 +198,7 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
         const SizedBox(height: 16),
         Text(
           _isTrackingEnabled
-              ? 'Your location is being tracked in the background every 15 minutes. This will continue even when the app is closed or killed.'
+              ? 'Your location is being tracked in the background every minute. This will continue even when the app is closed or killed.'
               : 'Start tracking to monitor your location in the background.',
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 16),
@@ -222,7 +222,7 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Background Service: ${isServiceRunning ? "Running" : "Stopped"}',
+                  'Foreground Service: ${isServiceRunning ? "Running" : "Stopped"}',
                   style: TextStyle(
                     color: isServiceRunning ? Colors.green : Colors.red,
                     fontWeight: FontWeight.bold,

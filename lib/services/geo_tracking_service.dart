@@ -4,7 +4,6 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'supabase_service.dart';
-import 'background_location_service.dart';
 import 'location_tracking_service.dart';
 
 class GeoTrackingService {
@@ -18,8 +17,6 @@ class GeoTrackingService {
 
   bool _isTrackingEnabled = false;
   final SupabaseService _supabaseService = SupabaseService();
-  final BackgroundLocationService _backgroundService =
-      BackgroundLocationService();
   final LocationTrackingService _foregroundService = LocationTrackingService();
 
   // Last saved location
@@ -28,9 +25,6 @@ class GeoTrackingService {
 
   // Initialize geo tracking service
   Future<void> initialize() async {
-    // Initialize the background service
-    await _backgroundService.initialize();
-
     // Check if tracking was enabled before
     SharedPreferences prefs = await SharedPreferences.getInstance();
     _isTrackingEnabled = prefs.getBool('geo_tracking_enabled') ?? false;
@@ -93,13 +87,10 @@ class GeoTrackingService {
       // Save initial position to Supabase
       await _supabaseService.saveLocation(position);
 
-      // Start the foreground service (new implementation)
+      // Start the foreground service
       bool foregroundStarted = await _foregroundService.startLocationTracking();
 
-      // Also start the background service (old implementation) for redundancy
-      bool backgroundStarted = await _backgroundService.startTracking();
-
-      if (foregroundStarted || backgroundStarted) {
+      if (foregroundStarted) {
         _isTrackingEnabled = true;
 
         // Start foreground tracking in the app
@@ -157,17 +148,14 @@ class GeoTrackingService {
   // Stop tracking location
   Future<void> stopTracking() async {
     try {
-      // Stop the foreground service (new implementation)
+      // Stop the foreground service
       bool foregroundStopped = await _foregroundService.stopLocationTracking();
-
-      // Also stop the background service (old implementation)
-      bool backgroundStopped = await _backgroundService.stopTracking();
 
       // Stop foreground tracking in the app
       _foregroundTimer?.cancel();
       _foregroundTimer = null;
 
-      if (foregroundStopped || backgroundStopped) {
+      if (foregroundStopped) {
         _isTrackingEnabled = false;
         Fluttertoast.showToast(msg: "Geo tracking stopped");
       } else {
@@ -195,14 +183,9 @@ class GeoTrackingService {
     return _lastPosition;
   }
 
-  // Check if the background service is running
+  // Check if the location tracking service is running
   Future<bool> isBackgroundServiceRunning() async {
-    // Check both services
-    bool backgroundRunning = await _backgroundService.isTrackingEnabled();
-    bool foregroundRunning =
-        await _foregroundService.isLocationTrackingEnabled();
-
-    // If either service is running, consider tracking as active
-    return backgroundRunning || foregroundRunning;
+    // Check if the foreground service is running
+    return await _foregroundService.isLocationTrackingEnabled();
   }
 }

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
-import 'package:workmanager/workmanager.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'services/supabase_service.dart';
 import 'services/call_recording_service.dart';
 import 'services/geo_tracking_service.dart';
-import 'services/background_location_service.dart';
 import 'models/user_model.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -16,12 +14,6 @@ import 'screens/admin_home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize Workmanager
-  await Workmanager().initialize(
-    callbackDispatcher,
-    isInDebugMode: true,
-  );
 
   // Initialize Supabase
   await SupabaseService.initialize();

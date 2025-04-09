@@ -14,7 +14,18 @@ import 'supabase_service.dart';
 
 /// Callback function that will be called in the background isolate
 @pragma('vm:entry-point')
-void locationTrackingCallback() {
+void locationTrackingCallback() async {
+  // Ensure Flutter binding is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Supabase client first
+  try {
+    await _initializeSupabase();
+    debugPrint('Supabase initialized in background isolate');
+  } catch (e) {
+    debugPrint('Error initializing Supabase in background isolate: $e');
+  }
+
   // Initialize communication channel for the background isolate
   const MethodChannel backgroundChannel =
       MethodChannel('com.example.call_geo/location_background');
@@ -26,9 +37,6 @@ void locationTrackingCallback() {
         final Map<dynamic, dynamic> locationData = call.arguments;
         debugPrint('Location update received in background: $locationData');
 
-        // Initialize Supabase client
-        await _initializeSupabase();
-
         // Save location to database
         await _saveLocationToDatabase(locationData);
       } catch (e) {
@@ -38,8 +46,8 @@ void locationTrackingCallback() {
     return null;
   });
 
-  // Signal to the native side that the callback has been initialized
-  backgroundChannel.invokeMethod('initialized');
+  // We don't need to signal back to native side as it's causing an exception
+  // backgroundChannel.invokeMethod('initialized');
 }
 
 // Initialize Supabase client in the background isolate
