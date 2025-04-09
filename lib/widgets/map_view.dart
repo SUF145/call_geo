@@ -7,6 +7,7 @@ class MapView extends StatefulWidget {
   final bool showUserPath;
   final double initialZoom;
   final LocationModel? highlightedLocation;
+  final List<LocationModel>? filteredLocations;
 
   const MapView({
     Key? key,
@@ -14,6 +15,7 @@ class MapView extends StatefulWidget {
     this.showUserPath = true,
     this.initialZoom = 14.0,
     this.highlightedLocation,
+    this.filteredLocations,
   }) : super(key: key);
 
   @override
@@ -24,39 +26,42 @@ class _MapViewState extends State<MapView> {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
   Set<Polyline> _polylines = {};
-  
+
   @override
   void initState() {
     super.initState();
     _updateMapData();
   }
-  
+
   @override
   void didUpdateWidget(MapView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.locations != widget.locations || 
+    if (oldWidget.locations != widget.locations ||
+        oldWidget.filteredLocations != widget.filteredLocations ||
         oldWidget.highlightedLocation != widget.highlightedLocation) {
       _updateMapData();
     }
   }
-  
+
   void _updateMapData() {
-    if (widget.locations.isEmpty) return;
-    
+    // Use filtered locations if available, otherwise use all locations
+    final locationsToShow = widget.filteredLocations ?? widget.locations;
+    if (locationsToShow.isEmpty) return;
+
     // Create markers for each location
     final markers = <Marker>{};
     final points = <LatLng>[];
-    
+
     // Sort locations by timestamp (oldest first)
-    final sortedLocations = List<LocationModel>.from(widget.locations)
+    final sortedLocations = List<LocationModel>.from(locationsToShow)
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-    
+
     // Add markers and collect points for polyline
     for (int i = 0; i < sortedLocations.length; i++) {
       final location = sortedLocations[i];
       final position = LatLng(location.latitude, location.longitude);
       points.add(position);
-      
+
       // Create marker
       final isHighlighted = widget.highlightedLocation?.id == location.id;
       final marker = Marker(
@@ -72,10 +77,10 @@ class _MapViewState extends State<MapView> {
         // Add a label with the index number
         zIndex: isHighlighted ? 2 : 1,
       );
-      
+
       markers.add(marker);
     }
-    
+
     // Create polyline if showing path
     final polylines = <Polyline>{};
     if (widget.showUserPath && points.length > 1) {
@@ -87,12 +92,12 @@ class _MapViewState extends State<MapView> {
       );
       polylines.add(polyline);
     }
-    
+
     setState(() {
       _markers = markers;
       _polylines = polylines;
     });
-    
+
     // Move camera to the most recent location or highlighted location
     if (_mapController != null) {
       final targetLocation = widget.highlightedLocation ?? sortedLocations.last;
@@ -104,18 +109,20 @@ class _MapViewState extends State<MapView> {
       );
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
-    if (widget.locations.isEmpty) {
+    // Use filtered locations if available, otherwise use all locations
+    final locationsToShow = widget.filteredLocations ?? widget.locations;
+    if (locationsToShow.isEmpty) {
       return const Center(child: Text('No location data available'));
     }
-    
+
     // Get the most recent location for initial camera position
-    final initialLocation = widget.locations.reduce(
+    final initialLocation = locationsToShow.reduce(
       (a, b) => a.timestamp.isAfter(b.timestamp) ? a : b,
     );
-    
+
     return GoogleMap(
       initialCameraPosition: CameraPosition(
         target: LatLng(initialLocation.latitude, initialLocation.longitude),
@@ -128,8 +135,11 @@ class _MapViewState extends State<MapView> {
       myLocationButtonEnabled: true,
       zoomControlsEnabled: true,
       onMapCreated: (controller) {
-        _mapController = controller;
-        _updateMapData();
+        // Only set the controller if it hasn't been set yet
+        if (_mapController == null) {
+          _mapController = controller;
+          _updateMapData();
+        }
       },
     );
   }

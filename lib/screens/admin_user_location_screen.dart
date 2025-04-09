@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
 import '../services/supabase_service.dart';
 import '../widgets/map_view.dart';
-import '../widgets/location_list.dart';
+import '../widgets/date_grouped_location_list.dart';
 
 class AdminUserLocationScreen extends StatefulWidget {
   final String userId;
@@ -15,12 +15,14 @@ class AdminUserLocationScreen extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<AdminUserLocationScreen> createState() => _AdminUserLocationScreenState();
+  State<AdminUserLocationScreen> createState() =>
+      _AdminUserLocationScreenState();
 }
 
 class _AdminUserLocationScreenState extends State<AdminUserLocationScreen> {
   final SupabaseService _supabaseService = SupabaseService();
   List<LocationModel> _locations = [];
+  List<LocationModel>? _filteredLocations;
   UserModel? _user;
   bool _isLoading = true;
   bool _showMap = true;
@@ -43,15 +45,21 @@ class _AdminUserLocationScreenState extends State<AdminUserLocationScreen> {
           .select()
           .eq('id', widget.userId)
           .single();
-      
+
       _user = UserModel.fromJson(userData);
 
       // Get user's location history
-      final locations = await _supabaseService.getUserLocationHistory(widget.userId);
-      
+      final locations =
+          await _supabaseService.getUserLocationHistory(widget.userId);
+
       if (mounted) {
         setState(() {
           _locations = locations;
+        });
+
+        await _processLocations();
+
+        setState(() {
           _isLoading = false;
         });
       }
@@ -65,13 +73,46 @@ class _AdminUserLocationScreenState extends State<AdminUserLocationScreen> {
     }
   }
 
+  Future<void> _processLocations() async {
+    if (_locations.isEmpty) return;
+
+    // Sort locations by timestamp (newest first)
+    final sortedLocations = List<LocationModel>.from(_locations)
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    // Set the initial filtered locations to the most recent day's locations
+    if (sortedLocations.isNotEmpty) {
+      final mostRecentDate =
+          DateFormat('yyyy-MM-dd').format(sortedLocations.first.timestamp);
+      _filteredLocations = sortedLocations.where((location) {
+        final locationDate =
+            DateFormat('yyyy-MM-dd').format(location.timestamp);
+        return locationDate == mostRecentDate;
+      }).toList();
+    }
+  }
+
+  Widget _buildDateGroupedListView() {
+    return DateGroupedLocationList(
+      locations: _locations,
+      onDateSelected: (locationsForDate) {
+        setState(() {
+          _filteredLocations = locationsForDate;
+        });
+      },
+      onLocationTap: (location) {
+        // When a location is tapped, center the map on it
+        // This would be used if we had a map controller
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_user != null 
-          ? '${_user!.fullName}\'s Location' 
-          : 'User Location'),
+        title: Text(
+            _user != null ? '${_user!.fullName}\'s Location' : 'User Location'),
         actions: [
           IconButton(
             icon: Icon(_showMap ? Icons.list : Icons.map),
@@ -101,36 +142,28 @@ class _AdminUserLocationScreenState extends State<AdminUserLocationScreen> {
                       child: _showMap
                           ? MapView(
                               locations: _locations,
+                              filteredLocations: _filteredLocations,
                               showUserPath: true,
                               initialZoom: 15,
+                              key: const ValueKey('admin_top_map'),
                             )
-                          : LocationList(
-                              locations: _locations,
-                              onLocationTap: (location) {
-                                setState(() {
-                                  _showMap = true;
-                                });
-                              },
-                            ),
+                          : _buildDateGroupedListView(),
                     ),
-                    
+
                     // Divider
                     const Divider(height: 1, thickness: 1),
-                    
+
                     // Location list (bottom half)
                     Expanded(
                       flex: 1,
                       child: _showMap
-                          ? LocationList(
-                              locations: _locations,
-                              onLocationTap: (location) {
-                                // Scroll to the location on the map
-                              },
-                            )
+                          ? _buildDateGroupedListView()
                           : MapView(
                               locations: _locations,
+                              filteredLocations: _filteredLocations,
                               showUserPath: true,
                               initialZoom: 15,
+                              key: const ValueKey('admin_bottom_map'),
                             ),
                     ),
                   ],
