@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'supabase_service.dart';
 import 'background_location_service.dart';
+import 'location_tracking_service.dart';
 
 class GeoTrackingService {
   static final GeoTrackingService _instance = GeoTrackingService._internal();
@@ -19,6 +20,7 @@ class GeoTrackingService {
   final SupabaseService _supabaseService = SupabaseService();
   final BackgroundLocationService _backgroundService =
       BackgroundLocationService();
+  final LocationTrackingService _foregroundService = LocationTrackingService();
 
   // Last saved location
   Position? _lastPosition;
@@ -36,6 +38,13 @@ class GeoTrackingService {
     // If tracking is enabled, start the foreground timer
     if (_isTrackingEnabled) {
       _startForegroundTracking();
+    }
+
+    // Check if the foreground service is running
+    bool isForegroundRunning =
+        await _foregroundService.isLocationTrackingEnabled();
+    if (isForegroundRunning != _isTrackingEnabled) {
+      _isTrackingEnabled = isForegroundRunning;
     }
   }
 
@@ -84,18 +93,21 @@ class GeoTrackingService {
       // Save initial position to Supabase
       await _supabaseService.saveLocation(position);
 
-      // Start the background service
-      bool started = await _backgroundService.startTracking();
+      // Start the foreground service (new implementation)
+      bool foregroundStarted = await _foregroundService.startLocationTracking();
 
-      if (started) {
+      // Also start the background service (old implementation) for redundancy
+      bool backgroundStarted = await _backgroundService.startTracking();
+
+      if (foregroundStarted || backgroundStarted) {
         _isTrackingEnabled = true;
 
-        // Start foreground tracking
+        // Start foreground tracking in the app
         _startForegroundTracking();
 
         Fluttertoast.showToast(msg: "Geo tracking started");
       } else {
-        Fluttertoast.showToast(msg: "Failed to start background tracking");
+        Fluttertoast.showToast(msg: "Failed to start location tracking");
       }
     } catch (e) {
       Fluttertoast.showToast(msg: "Error starting geo tracking: $e");
@@ -145,18 +157,21 @@ class GeoTrackingService {
   // Stop tracking location
   Future<void> stopTracking() async {
     try {
-      // Stop the background service
-      bool stopped = await _backgroundService.stopTracking();
+      // Stop the foreground service (new implementation)
+      bool foregroundStopped = await _foregroundService.stopLocationTracking();
 
-      // Stop foreground tracking
+      // Also stop the background service (old implementation)
+      bool backgroundStopped = await _backgroundService.stopTracking();
+
+      // Stop foreground tracking in the app
       _foregroundTimer?.cancel();
       _foregroundTimer = null;
 
-      if (stopped) {
+      if (foregroundStopped || backgroundStopped) {
         _isTrackingEnabled = false;
         Fluttertoast.showToast(msg: "Geo tracking stopped");
       } else {
-        Fluttertoast.showToast(msg: "Failed to stop background tracking");
+        Fluttertoast.showToast(msg: "Failed to stop location tracking");
       }
     } catch (e) {
       Fluttertoast.showToast(msg: "Error stopping geo tracking: $e");
@@ -182,6 +197,12 @@ class GeoTrackingService {
 
   // Check if the background service is running
   Future<bool> isBackgroundServiceRunning() async {
-    return await _backgroundService.isTrackingEnabled();
+    // Check both services
+    bool backgroundRunning = await _backgroundService.isTrackingEnabled();
+    bool foregroundRunning =
+        await _foregroundService.isLocationTrackingEnabled();
+
+    // If either service is running, consider tracking as active
+    return backgroundRunning || foregroundRunning;
   }
 }

@@ -279,20 +279,22 @@ class _UserGeofenceSettingsScreenState
 
   // Update the geofence circle visualization
   void _updateGeofenceCircle() {
-    if (_geofenceCenter == null) return;
-
     setState(() {
       _circles.clear();
-      _circles.add(
-        Circle(
-          circleId: const CircleId('geofence'),
-          center: _geofenceCenter!,
-          radius: _geofenceRadius,
-          fillColor: Colors.blue.withAlpha(51), // 0.2 opacity = 51/255
-          strokeColor: Colors.blue,
-          strokeWidth: 2,
-        ),
-      );
+
+      // Only add the circle if geofence is enabled and center is set
+      if (_geofenceCenter != null && _isGeofenceEnabled) {
+        _circles.add(
+          Circle(
+            circleId: const CircleId('geofence'),
+            center: _geofenceCenter!,
+            radius: _geofenceRadius,
+            fillColor: Colors.blue.withAlpha(51), // 0.2 opacity = 51/255
+            strokeColor: Colors.blue,
+            strokeWidth: 2,
+          ),
+        );
+      }
     });
   }
 
@@ -313,6 +315,9 @@ class _UserGeofenceSettingsScreenState
     setState(() {
       _isGeofenceEnabled = newEnabledState;
     });
+
+    // Update the circle visualization to show/hide based on new state
+    _updateGeofenceCircle();
 
     // Save the settings
     final success = await _saveGeofenceSettings();

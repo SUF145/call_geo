@@ -71,6 +71,24 @@
             android:exported="false"
             android:stopWithTask="false"
             android:foregroundServiceType="location" />
+
+        <!-- Custom foreground service for continuous location tracking -->
+        <service
+            android:name=".services.LocationTrackingService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- Receiver to restart service on boot -->
+        <receiver
+            android:name=".services.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
