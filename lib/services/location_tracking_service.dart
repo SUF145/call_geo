@@ -11,7 +11,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:vibration/vibration.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'firebase_messaging_service_new.dart';
 
 import '../models/location_model.dart';
 import '../models/user_geofence_settings_model.dart';
@@ -160,6 +160,8 @@ Future<void> _checkGeofence(Position position) async {
       return;
     }
 
+    debugPrint('Checking geofence for user ${user.id}');
+
     // Load user's geofence settings
     final response = await supabase
         .from('user_geofence_settings')
@@ -202,7 +204,90 @@ Future<void> _checkGeofence(Position position) async {
       if (_lastGeofenceAlertTime == null ||
           now.difference(_lastGeofenceAlertTime!).inMinutes >= 1) {
         _lastGeofenceAlertTime = now;
-        await _showGeofenceAlert(distanceInMeters);
+        debugPrint('Showing geofence alert - user is outside allowed area');
+
+        // Get the admin who created this user's geofence
+        final SupabaseService supabaseService = SupabaseService();
+        final adminUser = await supabaseService.getCreatorAdmin(user.id);
+
+        // Get user's name for the admin notification
+        final userData = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .single();
+
+        final String userName = userData['full_name'] ?? 'User';
+
+        // Check if the current user is the admin or the user who left the geofence
+        final currentUser = supabase.auth.currentUser;
+        final bool isCurrentUserAdmin = adminUser != null &&
+            currentUser != null &&
+            currentUser.id == adminUser.id;
+        final bool isCurrentUserTheUser =
+            currentUser != null && currentUser.id == user.id;
+
+        debugPrint('Current user ID: ${currentUser?.id}');
+        debugPrint('User who left geofence: ${user.id}');
+        debugPrint('Admin ID: ${adminUser?.id}');
+        debugPrint('Is current user admin? $isCurrentUserAdmin');
+        debugPrint(
+            'Is current user the one who left geofence? $isCurrentUserTheUser');
+
+        // Show appropriate notification based on who is logged in
+        if (isCurrentUserTheUser) {
+          // Show notification to the user who left the geofence
+          debugPrint('Showing notification to the user who left the geofence');
+          await _showGeofenceAlert(distanceInMeters,
+              isForAdmin: false, userName: null, userId: null);
+        } else if (isCurrentUserAdmin) {
+          // Show notification to the admin
+          debugPrint('Showing notification to the admin about user ${user.id}');
+          await _showGeofenceAlert(distanceInMeters,
+              isForAdmin: true, userName: userName, userId: user.id);
+        } else {
+          debugPrint(
+              'Current user is neither the admin nor the user who left the geofence');
+        }
+
+        // Also send a notification to the admin's device (this will only show if the admin is logged in on another device)
+        if (adminUser != null && !isCurrentUserAdmin) {
+          debugPrint(
+              'Sending notification to admin device for ${adminUser.id}');
+
+          try {
+            // Use Firebase Messaging Service to send a notification to the admin's device
+            final FirebaseMessagingService firebaseMessagingService =
+                FirebaseMessagingService();
+
+            // Create the admin notification message
+            final String title = "User Outside Geofence Alert";
+            final String message =
+                "$userName is outside their allowed area! They are approximately ${distanceInMeters.toStringAsFixed(0)} meters from the boundary.";
+
+            // Send the notification to the admin's device
+            final bool success =
+                await firebaseMessagingService.sendNotificationToUser(
+              adminUser.id,
+              title,
+              message,
+              isAdminNotification: true,
+              targetUserId: user.id,
+            );
+
+            if (success) {
+              debugPrint(
+                  'Cross-device notification sent to admin ${adminUser.id}');
+            } else {
+              debugPrint(
+                  'Failed to send cross-device notification to admin ${adminUser.id}');
+            }
+          } catch (e) {
+            debugPrint('Error sending cross-device notification: $e');
+          }
+        }
+      } else {
+        debugPrint('Skipping geofence alert - already shown recently');
       }
     }
   } catch (e) {
@@ -211,11 +296,34 @@ Future<void> _checkGeofence(Position position) async {
 }
 
 // Show alert when user is outside geofence
-Future<void> _showGeofenceAlert(double distanceFromCenter) async {
+Future<void> _showGeofenceAlert(
+  double distanceFromCenter, {
+  bool isForAdmin = false,
+  String? userName,
+  String? userId,
+}) async {
   try {
     // Vibrate the device
     if (await Vibration.hasVibrator() ?? false) {
       Vibration.vibrate(duration: 1000);
+    }
+
+    // Prepare the message based on whether this is for admin or user
+    String message;
+    String title;
+
+    if (isForAdmin && userName != null) {
+      // Admin notification
+      title = "User Outside Geofence Alert";
+      message =
+          "$userName is outside their allowed area! They are approximately ${distanceFromCenter.toStringAsFixed(0)} meters from the boundary.";
+      debugPrint('Showing ADMIN notification for user $userName ($userId)');
+    } else {
+      // User notification
+      title = "Geofence Alert";
+      message =
+          "You are outside the allowed area! Please return immediately. You are approximately ${distanceFromCenter.toStringAsFixed(0)} meters from the boundary.";
+      debugPrint('Showing USER notification');
     }
 
     // Show toast notification
@@ -223,8 +331,7 @@ Future<void> _showGeofenceAlert(double distanceFromCenter) async {
     // We'll rely on the native notification instead
     try {
       Fluttertoast.showToast(
-        msg:
-            "Warning: You are outside the allowed area! Please return immediately.",
+        msg: message,
         toastLength: Toast.LENGTH_LONG,
         gravity: ToastGravity.CENTER,
         backgroundColor: Colors.red,
@@ -240,11 +347,32 @@ Future<void> _showGeofenceAlert(double distanceFromCenter) async {
         MethodChannel('com.example.call_geo/location_background');
 
     try {
-      await backgroundChannel.invokeMethod('showGeofenceAlert', {
+      // Log the notification parameters
+      debugPrint('Sending notification with parameters:');
+      debugPrint('  - distance: $distanceFromCenter');
+      debugPrint('  - message: $message');
+      debugPrint('  - title: $title');
+      debugPrint('  - is_admin_notification: $isForAdmin');
+      debugPrint('  - user_id: $userId');
+
+      // Create a map of parameters, ensuring userId is only included for admin notifications
+      final Map<String, dynamic> params = {
         'distance': distanceFromCenter,
-        'message':
-            'You are outside the allowed area! Please return immediately.',
-      });
+        'message': message,
+        'title': title,
+        'is_admin_notification': isForAdmin,
+      };
+
+      // Only include userId for admin notifications
+      if (isForAdmin && userId != null) {
+        params['user_id'] = userId;
+      }
+
+      // Invoke the method to show the notification
+      final result =
+          await backgroundChannel.invokeMethod('showGeofenceAlert', params);
+
+      debugPrint('Notification result: $result');
     } catch (e) {
       debugPrint('Error sending notification: $e');
     }
@@ -384,10 +512,10 @@ class LocationTrackingService {
       // Store Supabase URL and key
       // We need to hardcode these values since we can't access them directly from the client
       final supabaseUrl = const String.fromEnvironment('SUPABASE_URL',
-          defaultValue: 'https://ixpwcfkbmwxnwfkgwsqn.supabase.co');
+          defaultValue: 'https://gwipwoxbulgdfjgirtle.supabase.co');
       final supabaseKey = const String.fromEnvironment('SUPABASE_KEY',
           defaultValue:
-              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4cHdjZmtibXd4bndma2d3c3FuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTI2NTI1NzcsImV4cCI6MjAyODIyODU3N30.Rl5Vy-5gu-hF5UBOIgPT_Q4RFIhsA3XTxNXHPPELGHM');
+              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aXB3b3hidWxnZGZqZ2lydGxlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQwOTc0ODksImV4cCI6MjA1OTY3MzQ4OX0.a-r2-tqe8f9KHEkD_2yn2Uo3hYz2LdimjprI6nU_7gE');
 
       await prefs.setString('supabase_url', supabaseUrl);
       await prefs.setString('supabase_key', supabaseKey);

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "223019480909",
+    "project_id": "callgeotracking",
+    "storage_bucket": "callgeotracking.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:223019480909:android:7a1653f2cd4914f3cd6904",
+        "android_client_info": {
+          "package_name": "com.example.call_geo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8WSbnp7RUxJdZvXYvggv1iB6wP4Gq958"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

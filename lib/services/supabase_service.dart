@@ -7,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/user_model.dart';
 import '../models/location_model.dart';
 import '../models/user_geofence_settings_model.dart';
+import 'firebase_messaging_service_new.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -192,6 +193,10 @@ class SupabaseService {
         debugPrint('User role from DB: ${userData['role']}');
         debugPrint('User role in model: ${userModel.role}');
         debugPrint('Is admin: ${userModel.isAdmin}');
+
+        // Save the FCM token to Supabase
+        final firebaseMessagingService = FirebaseMessagingService();
+        await firebaseMessagingService.initialize();
 
         return userModel;
       }
@@ -600,6 +605,42 @@ class SupabaseService {
     } catch (e) {
       debugPrint('Error getting user location history: $e');
       return [];
+    }
+  }
+
+  // Get the admin who created a user
+  Future<UserModel?> getCreatorAdmin(String userId) async {
+    try {
+      debugPrint('Fetching creator admin for user: $userId');
+      final userData = await supabase
+          .from('profiles')
+          .select('created_by')
+          .eq('id', userId)
+          .single();
+
+      final String? adminId = userData['created_by'];
+
+      if (adminId == null) {
+        debugPrint('No creator admin found for user: $userId');
+        return null;
+      }
+
+      final adminData = await supabase
+          .from('profiles')
+          .select()
+          .eq('id', adminId)
+          .eq('role', 'admin')
+          .maybeSingle();
+
+      if (adminData == null) {
+        debugPrint('Admin not found or not an admin anymore: $adminId');
+        return null;
+      }
+
+      return UserModel.fromJson(adminData);
+    } catch (e) {
+      debugPrint('Error getting creator admin: $e');
+      return null;
     }
   }
 

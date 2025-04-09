@@ -188,7 +188,12 @@ public class LocationTrackingService extends Service {
                 try {
                     Double distance = call.argument("distance");
                     String message = call.argument("message");
-                    showGeofenceNotification(distance, message);
+                    String title = call.argument("title");
+                    Boolean isAdminNotification = call.argument("is_admin_notification");
+                    String userId = call.argument("user_id");
+
+                    Log.d(TAG, "Showing geofence notification: " + message + ", isAdmin: " + isAdminNotification + ", userId: " + userId);
+                    showGeofenceNotification(distance, message, title, isAdminNotification, userId);
                     result.success(true);
                 } catch (Exception e) {
                     Log.e(TAG, "Error showing geofence notification: " + e.getMessage());
@@ -227,6 +232,11 @@ public class LocationTrackingService extends Service {
 
     // Show a notification when the user is outside the geofence
     private void showGeofenceNotification(Double distance, String message) {
+        showGeofenceNotification(distance, message, null, false, null);
+    }
+
+    // Show a notification when the user is outside the geofence with additional parameters
+    private void showGeofenceNotification(Double distance, String message, String title, Boolean isAdminNotification, String userId) {
         // Create a notification channel for geofence alerts (if not already created)
         String channelId = "GeofenceAlertChannel";
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -234,7 +244,7 @@ public class LocationTrackingService extends Service {
                     channelId,
                     "Geofence Alerts",
                     NotificationManager.IMPORTANCE_HIGH);
-            channel.setDescription("Alerts when you leave your allowed area");
+            channel.setDescription("Alerts when you or your users leave the allowed area");
             channel.enableVibration(true);
             channel.setVibrationPattern(new long[]{0, 1000, 500, 1000});
 
@@ -247,26 +257,36 @@ public class LocationTrackingService extends Service {
         // Create an intent to open the app when the notification is tapped
         Intent intent = new Intent(this, MainActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
+
+        // If this is an admin notification, add the user ID to the intent
+        if (isAdminNotification != null && isAdminNotification && userId != null) {
+            intent.putExtra("view_user_location", true);
+            intent.putExtra("user_id", userId);
+            Log.d(TAG, "Adding user ID to intent: " + userId);
+        }
+
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
+        // Use the provided title or default
+        String notificationTitle = title != null ? title : "⚠️ Geofence Alert";
 
         // Build the notification
-        Notification notification = new NotificationCompat.Builder(this, channelId)
-                .setContentTitle("⚠️ Geofence Alert")
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
+                .setContentTitle(notificationTitle)
                 .setContentText(message)
-                .setStyle(new NotificationCompat.BigTextStyle()
-                        .bigText(message + " You are approximately " + Math.round(distance) + " meters outside your allowed area."))
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
-                .setVibrate(new long[]{0, 1000, 500, 1000})
-                .build();
+                .setVibrate(new long[]{0, 1000, 500, 1000});
 
         // Show the notification
         NotificationManager notificationManager = getSystemService(NotificationManager.class);
         if (notificationManager != null) {
-            // Use a different ID than the foreground service notification
-            notificationManager.notify(2, notification);
+            // Use a different ID for admin notifications
+            int notificationId = (isAdminNotification != null && isAdminNotification) ? 3 : 2;
+            notificationManager.notify(notificationId, builder.build());
         }
     }
 }

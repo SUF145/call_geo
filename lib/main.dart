@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'services/supabase_service.dart';
 import 'services/call_recording_service.dart';
 import 'services/geo_tracking_service.dart';
+import 'services/notification_service.dart';
+import 'services/firebase_messaging_service_new.dart';
 import 'models/user_model.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_home_screen.dart';
+import 'screens/admin_user_location_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase
+  await Firebase.initializeApp();
 
   // Initialize Supabase
   await SupabaseService.initialize();
@@ -21,6 +28,10 @@ void main() async {
   // Initialize services
   final callRecordingService = CallRecordingService();
   await callRecordingService.initialize();
+
+  // Initialize Firebase Messaging Service
+  final firebaseMessagingService = FirebaseMessagingService();
+  await firebaseMessagingService.initialize();
 
   // Initialize geo tracking service with background capability
   final geoTrackingService = GeoTrackingService();
@@ -44,13 +55,63 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  // Global navigator key to access navigation from anywhere
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // Set up method channel to handle navigation from native code
+    const MethodChannel channel = MethodChannel('com.example.call_geo/main');
+    channel.setMethodCallHandler(_handleMethodCall);
+  }
+
+  // Handle method calls from native code
+  Future<dynamic> _handleMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'navigateToUserLocation':
+        final String userId = call.arguments as String;
+        // Navigate to the user location screen
+        _navigateToUserLocation(userId);
+        return true;
+      default:
+        return null;
+    }
+  }
+
+  // Navigate to user location screen
+  void _navigateToUserLocation(String userId) async {
+    // Get the current context from the navigator key
+    final context = navigatorKey.currentContext;
+    if (context != null) {
+      // Check if the current user is an admin
+      final currentUser = await SupabaseService().getCurrentUser();
+      if (currentUser != null &&
+          currentUser.isAdmin &&
+          navigatorKey.currentContext != null) {
+        // Navigate to the user location screen
+        Navigator.of(navigatorKey.currentContext!).push(
+          MaterialPageRoute(
+            builder: (context) => AdminUserLocationScreen(userId: userId),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Call & Geo',
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
