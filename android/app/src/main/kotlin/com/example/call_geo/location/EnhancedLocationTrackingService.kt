@@ -41,8 +41,8 @@ class EnhancedLocationTrackingService : Service() {
     private var recentlySpoofingNotified = false
     private var lastNotificationTime = 0L
 
-    // Minimum time between notifications (15 minutes)
-    private val MIN_NOTIFICATION_INTERVAL = TimeUnit.MINUTES.toMillis(15)
+    // Minimum time between notifications (10 seconds)
+    private val MIN_NOTIFICATION_INTERVAL = TimeUnit.SECONDS.toMillis(10)
 
     override fun onCreate() {
         super.onCreate()
@@ -151,7 +151,7 @@ class EnhancedLocationTrackingService : Service() {
         // Upload location data to your backend
         uploadLocationData(locationData)
 
-        // If spoofing is detected, notify the user (with rate limiting)
+        // If spoofing is detected, notify the user (with 10-second interval)
         if (spoofingResult.isSpoofingDetected) {
             Log.w(TAG, "Potential location spoofing detected: ${spoofingResult.reasons}")
 
@@ -159,11 +159,12 @@ class EnhancedLocationTrackingService : Service() {
             if (!recentlySpoofingNotified ||
                 (currentTime - lastNotificationTime > MIN_NOTIFICATION_INTERVAL)) {
 
+                Log.d(TAG, "Showing spoofing notification with reasons: ${spoofingResult.reasons}")
                 notificationHelper.showSpoofingDetectedNotification(spoofingResult.reasons)
                 recentlySpoofingNotified = true
                 lastNotificationTime = currentTime
             } else {
-                Log.d(TAG, "Skipping notification due to rate limiting")
+                Log.d(TAG, "Waiting to show next notification. Time since last: ${(currentTime - lastNotificationTime) / 1000} seconds")
             }
         } else {
             // Reset notification flag if no spoofing detected
