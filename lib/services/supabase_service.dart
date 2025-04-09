@@ -10,6 +10,8 @@ import '../models/user_model.dart';
 import '../models/location_model.dart';
 import '../models/user_geofence_settings_model.dart';
 import 'firebase_messaging_service_new.dart';
+import 'location_tracking_service.dart';
+import 'geo_tracking_service.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -390,8 +392,53 @@ class SupabaseService {
   // Sign Out
   Future<void> signOut() async {
     try {
+      // Get the current user before signing out
+      final User? currentUser = supabase.auth.currentUser;
+
+      if (currentUser != null) {
+        final String userId = currentUser.id;
+        debugPrint('Signing out user: $userId');
+
+        try {
+          // Delete the FCM token from the database to prevent receiving notifications
+          debugPrint('Deleting FCM token for user: $userId');
+          await supabase.from('device_tokens').delete().eq('user_id', userId);
+          debugPrint('FCM token deleted successfully');
+
+          // Stop location tracking service if it's running
+          try {
+            // First check and stop the foreground location service
+            final locationTrackingService = LocationTrackingService();
+            final isTracking =
+                await locationTrackingService.isLocationTrackingEnabled();
+
+            if (isTracking) {
+              debugPrint(
+                  'Stopping location tracking service for user: $userId');
+              await locationTrackingService.stopLocationTracking();
+              debugPrint('Location tracking service stopped successfully');
+            }
+
+            // Also stop the geo tracking service
+            final geoTrackingService = GeoTrackingService();
+            if (geoTrackingService.isGeoTrackingEnabled()) {
+              debugPrint('Stopping geo tracking service for user: $userId');
+              await geoTrackingService.stopTracking();
+              debugPrint('Geo tracking service stopped successfully');
+            }
+          } catch (e) {
+            debugPrint('Error stopping tracking services: $e');
+          }
+        } catch (e) {
+          debugPrint('Error cleaning up before sign out: $e');
+        }
+      }
+
+      // Sign out from Supabase
       await supabase.auth.signOut();
+      debugPrint('User signed out successfully');
     } catch (e) {
+      debugPrint('Error during sign out: $e');
       Fluttertoast.showToast(
         msg: "Error during sign out: ${e.toString()}",
         toastLength: Toast.LENGTH_LONG,
