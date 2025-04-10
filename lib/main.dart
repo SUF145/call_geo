@@ -16,6 +16,9 @@ import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/admin_home_screen.dart';
 import 'screens/admin_user_location_screen.dart';
+import 'screens/splash_screen.dart';
+import 'theme/space_theme.dart';
+import 'widgets/cosmic_loading.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -158,14 +161,11 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Call & Geo',
+      title: 'CallGeo Tracker',
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      home: const AuthWrapper(),
+      theme: SpaceTheme.themeData,
+      home: SplashScreen(nextScreen: const AuthWrapper()),
     );
   }
 }
@@ -198,9 +198,16 @@ class _AuthWrapperState extends State<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
+      return Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: SpaceTheme.deepSpaceGradient,
+          ),
+          child: const Center(
+            child: CosmicLoading(
+              message: "Preparing for launch...",
+            ),
+          ),
         ),
       );
     }

@@ -44,6 +44,7 @@ dependencies:
   # UI components
   flutter_spinkit: ^5.2.0
   fluttertoast: ^8.2.4
+  google_fonts: ^6.1.0
 
   # Permissions handling
   permission_handler: ^11.3.0
