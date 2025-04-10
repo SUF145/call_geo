@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Main Body -->
+  <rect x="40" y="40" width="20" height="30" rx="2" fill="#2A2550"/>
+  
+  <!-- Solar Panels -->
+  <rect x="10" y="45" width="30" height="15" fill="#4F9BFF"/>
+  <rect x="60" y="45" width="30" height="15" fill="#4F9BFF"/>
+  
+  <!-- Panel Supports -->
+  <rect x="35" y="50" width="5" height="5" fill="#E0E7FF"/>
+  <rect x="60" y="50" width="5" height="5" fill="#E0E7FF"/>
+  
+  <!-- Antenna -->
+  <line x1="50" y1="40" x2="50" y2="25" stroke="#E0E7FF" stroke-width="2"/>
+  <circle cx="50" cy="25" r="3" fill="#FF6B97"/>
+  
+  <!-- Dish -->
+  <ellipse cx="50" cy="75" rx="8" ry="5" fill="#E0E7FF"/>
+  
+  <!-- Details -->
+  <circle cx="45" cy="45" r="2" fill="#FF9B50"/>
+  <circle cx="55" cy="45" r="2" fill="#FF9B50"/>
+  <rect x="45" y="55" width="10" height="5" fill="#6A3DE8"/>
+</svg>

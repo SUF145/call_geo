@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
-import '../models/user_model.dart';
+import '../theme/space_theme.dart';
+import '../widgets/space_background.dart';
+import '../widgets/cosmic_button.dart';
+import '../widgets/cosmic_card.dart';
 import 'login_screen.dart';
-import 'call_recording_screen.dart';
-import 'geo_tracking_screen.dart';
+import 'user_location_screen.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   Future<void> _signOut(BuildContext context) async {
     await SupabaseService().signOut();
@@ -20,8 +22,14 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Home'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          'Mission Control',
+          style: SpaceTheme.textTheme.headlineMedium,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -29,82 +37,58 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Select a Feature',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-            _buildFeatureCard(
-              context,
-              'Geo Tracking',
-              'Track your location in real-time',
-              Icons.location_on,
-              Colors.green,
-              () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const GeoTrackingScreen(),
+      body: SpaceBackground(
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 20),
+                Text(
+                  'Welcome, Explorer',
+                  style: SpaceTheme.textTheme.displaySmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 40),
+                CosmicCard(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 60,
+                        color: SpaceTheme.nebulaPink,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Location Tracking',
+                        style: SpaceTheme.textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Monitor your cosmic coordinates in real-time',
+                        textAlign: TextAlign.center,
+                        style: SpaceTheme.textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 24),
+                      CosmicButton(
+                        text: 'Launch Tracker',
+                        icon: Icons.rocket_launch,
+                        color: SpaceTheme.pulsarBlue,
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const UserLocationScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                );
-              },
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeatureCard(
-    BuildContext context,
-    String title,
-    String description,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                size: 60,
-                color: color,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                description,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
           ),
         ),
       ),

@@ -3,39 +3,68 @@ import 'package:google_fonts/google_fonts.dart';
 
 class SpaceTheme {
   // Primary Colors
-  static const Color deepSpaceNavy = Color(0xFF0B1026);
-  static const Color cosmicPurple = Color(0xFF4A1E9E);
-  static const Color nebulaPink = Color(0xFFFF4E8A);
-  
+  static const Color deepSpaceNavy = Color(0xFF0F0B30); // Darker purple-blue
+  static const Color cosmicPurple = Color(0xFF6A3DE8); // Brighter purple
+  static const Color nebulaPink = Color(0xFFFF6B97); // Softer pink
+
   // Secondary Colors
-  static const Color starlightSilver = Color(0xFFE0E7FF);
-  static const Color asteroidGray = Color(0xFF3D4663);
-  static const Color pulsarBlue = Color(0xFF00D1FF);
-  
+  static const Color starlightSilver = Color(0xFFFFFFFF); // Pure white for text
+  static const Color asteroidGray =
+      Color(0xFF2A2550); // Darker purple for cards
+  static const Color pulsarBlue = Color(0xFF4F9BFF); // Bright blue for accents
+
   // Accent Colors
-  static const Color marsRed = Color(0xFFFF5757);
-  static const Color saturnGold = Color(0xFFFFB800);
-  static const Color auroraGreen = Color(0xFF39D98A);
-  
+  static const Color marsRed = Color(0xFFFF5757); // Red for alerts
+  static const Color saturnGold = Color(0xFFFFAC4B); // Orange for planets
+  static const Color auroraGreen = Color(0xFF39D98A); // Green for success
+
   // Gradients
   static const LinearGradient deepSpaceGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
     colors: [deepSpaceNavy, Color(0xFF1E0B40)],
   );
-  
+
   static const LinearGradient nebulaGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [cosmicPurple, nebulaPink],
   );
-  
+
   static const LinearGradient auroraGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [pulsarBlue, auroraGreen],
   );
-  
+
+  // Button Gradients
+  static const LinearGradient adminButtonGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF8A56FF),
+      Color(0xFF4A25B5)
+    ], // Purple gradient for admin button
+  );
+
+  static const LinearGradient userButtonGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF4F9BFF),
+      Color(0xFF2B68E0)
+    ], // Blue gradient for user button
+  );
+
+  static const LinearGradient actionButtonGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF9747FF),
+      Color(0xFF7030A0)
+    ], // Purple gradient for action buttons
+  );
+
   // Typography
   static TextTheme textTheme = TextTheme(
     displayLarge: GoogleFonts.rajdhani(
@@ -82,7 +111,7 @@ class SpaceTheme {
       color: starlightSilver,
     ),
   );
-  
+
   // Special numerical font
   static TextStyle orbitronStyle({
     double fontSize = 14,
@@ -95,7 +124,7 @@ class SpaceTheme {
       color: color,
     );
   }
-  
+
   // Theme data
   static ThemeData themeData = ThemeData(
     scaffoldBackgroundColor: deepSpaceNavy,
@@ -104,7 +133,7 @@ class SpaceTheme {
       primary: cosmicPurple,
       secondary: nebulaPink,
       surface: deepSpaceNavy,
-      background: deepSpaceNavy,
+      // Using surface instead of deprecated background
       error: marsRed,
     ),
     textTheme: textTheme,
@@ -138,7 +167,8 @@ class SpaceTheme {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: asteroidGray.withOpacity(0.3),
+      fillColor:
+          asteroidGray.withAlpha(76), // Using withAlpha instead of withOpacity
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide.none,
@@ -152,10 +182,13 @@ class SpaceTheme {
         borderSide: const BorderSide(color: pulsarBlue, width: 2),
       ),
       labelStyle: textTheme.bodyMedium,
-      hintStyle: textTheme.bodyMedium?.copyWith(color: starlightSilver.withOpacity(0.5)),
+      hintStyle: textTheme.bodyMedium?.copyWith(
+          color: starlightSilver
+              .withAlpha(128)), // Using withAlpha instead of withOpacity
     ),
     cardTheme: CardTheme(
-      color: asteroidGray.withOpacity(0.3),
+      color:
+          asteroidGray.withAlpha(76), // Using withAlpha instead of withOpacity
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),

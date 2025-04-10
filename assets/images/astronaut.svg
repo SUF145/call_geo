@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="150" height="150" viewBox="0 0 150 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Helmet -->
+  <circle cx="75" cy="60" r="25" fill="#E0E7FF" fill-opacity="0.9"/>
+  <circle cx="75" cy="60" r="23" fill="#2A2550" fill-opacity="0.7"/>
+  <circle cx="65" cy="55" r="3" fill="white" fill-opacity="0.8"/>
+  <circle cx="75" cy="50" r="2" fill="white" fill-opacity="0.6"/>
+  
+  <!-- Suit -->
+  <path d="M50 70 L60 100 L90 100 L100 70 Z" fill="#E0E7FF"/>
+  <rect x="60" y="100" width="30" height="20" fill="#E0E7FF"/>
+  
+  <!-- Arms -->
+  <path d="M50 75 L40 90 L45 95 L55 80 Z" fill="#E0E7FF"/>
+  <path d="M100 75 L110 90 L105 95 L95 80 Z" fill="#E0E7FF"/>
+  
+  <!-- Legs -->
+  <path d="M60 120 L55 140 L65 140 L65 120 Z" fill="#E0E7FF"/>
+  <path d="M90 120 L95 140 L85 140 L85 120 Z" fill="#E0E7FF"/>
+  
+  <!-- Details -->
+  <rect x="65" y="80" width="20" height="10" rx="5" fill="#6A3DE8"/>
+  <circle cx="75" cy="85" r="3" fill="#4F9BFF"/>
+  
+  <!-- Backpack -->
+  <rect x="65" y="70" width="20" height="15" rx="3" fill="#2A2550"/>
+  
+  <!-- Visor Reflection -->
+  <path d="M65 55 Q75 65 85 55 Q75 45 65 55 Z" fill="#4F9BFF" fill-opacity="0.5"/>
+</svg>
