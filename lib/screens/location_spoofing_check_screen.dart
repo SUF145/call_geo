@@ -7,10 +7,12 @@ class LocationSpoofingCheckScreen extends StatefulWidget {
   const LocationSpoofingCheckScreen({super.key});
 
   @override
-  State<LocationSpoofingCheckScreen> createState() => _LocationSpoofingCheckScreenState();
+  State<LocationSpoofingCheckScreen> createState() =>
+      _LocationSpoofingCheckScreenState();
 }
 
-class _LocationSpoofingCheckScreenState extends State<LocationSpoofingCheckScreen> {
+class _LocationSpoofingCheckScreenState
+    extends State<LocationSpoofingCheckScreen> {
   final LocationSpoofingService _spoofingService = LocationSpoofingService();
   bool _isLoading = false;
   bool _isTrackingEnabled = false;
@@ -25,7 +27,8 @@ class _LocationSpoofingCheckScreenState extends State<LocationSpoofingCheckScree
 
   /// Check if enhanced location tracking is running
   Future<void> _checkTrackingStatus() async {
-    final isEnabled = await _spoofingService.isEnhancedLocationTrackingRunning();
+    final isEnabled =
+        await _spoofingService.isEnhancedLocationTrackingRunning();
     setState(() {
       _isTrackingEnabled = isEnabled;
     });
@@ -45,7 +48,7 @@ class _LocationSpoofingCheckScreenState extends State<LocationSpoofingCheckScree
       });
 
       // Show alert if spoofing is detected
-      if (result['mockLocationEnabled'] == true || 
+      if (result['mockLocationEnabled'] == true ||
           result['spoofingAppsInstalled'] == true) {
         if (mounted) {
           _spoofingService.showSpoofingAlertIfDetected(context);
@@ -107,61 +110,6 @@ class _LocationSpoofingCheckScreenState extends State<LocationSpoofingCheckScree
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Spoofing detection status card
-                  Card(
-                    elevation: 4,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Spoofing Detection Status',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          if (_spoofingCheckResult != null) ...[
-                            _buildStatusRow(
-                              'Mock Location Enabled',
-                              _spoofingCheckResult!['mockLocationEnabled'] ?? false,
-                            ),
-                            const SizedBox(height: 8),
-                            _buildStatusRow(
-                              'Spoofing Apps Installed',
-                              _spoofingCheckResult!['spoofingAppsInstalled'] ?? false,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _isSpoofingDetected()
-                                  ? 'Location spoofing detected! Please disable mock locations and remove any spoofing apps.'
-                                  : 'No location spoofing detected.',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: _isSpoofingDetected()
-                                    ? Colors.red
-                                    : Colors.green,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _checkForSpoofing,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryColor,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text('Check Again'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
                   // Enhanced tracking service card
                   Card(
                     elevation: 4,
@@ -210,9 +158,9 @@ class _LocationSpoofingCheckScreenState extends State<LocationSpoofingCheckScree
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Information card
                   Card(
                     elevation: 4,
@@ -275,8 +223,8 @@ class _LocationSpoofingCheckScreenState extends State<LocationSpoofingCheckScree
   /// Check if any form of spoofing is detected
   bool _isSpoofingDetected() {
     if (_spoofingCheckResult == null) return false;
-    
+
     return (_spoofingCheckResult!['mockLocationEnabled'] == true) ||
-           (_spoofingCheckResult!['spoofingAppsInstalled'] == true);
+        (_spoofingCheckResult!['spoofingAppsInstalled'] == true);
   }
 }

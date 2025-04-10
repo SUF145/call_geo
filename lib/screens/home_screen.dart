@@ -45,21 +45,6 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 40),
             _buildFeatureCard(
               context,
-              'Call Recording',
-              'Record your phone calls automatically',
-              Icons.call,
-              Colors.blue,
-              () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CallRecordingScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            _buildFeatureCard(
-              context,
               'Geo Tracking',
               'Track your location in real-time',
               Icons.location_on,

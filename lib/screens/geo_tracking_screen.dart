@@ -279,29 +279,6 @@ class GeoTrackingScreenState extends State<GeoTrackingScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        Card(
-          elevation: 4,
-          child: const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                Text(
-                  'About Geo Tracking',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'This feature tracks your location in the background and saves it for later viewing. It will continue to work even when the app is closed.',
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
         // Location History Button
         ElevatedButton.icon(
           onPressed: () {

@@ -11,7 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:vibration/vibration.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+// Removed fluttertoast import as toast notifications are no longer used
 import 'package:uuid/uuid.dart';
 import 'firebase_messaging_service_new.dart';
 import 'firebase_cloud_messaging_v1.dart';
@@ -416,21 +416,8 @@ Future<void> _showGeofenceAlert(
       debugPrint('Showing USER notification');
     }
 
-    // Show toast notification
-    // Note: This might not work in the background isolate
+    // Toast notifications have been removed as requested
     // We'll rely on the native notification instead
-    try {
-      Fluttertoast.showToast(
-        msg: message,
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.CENTER,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-        fontSize: 16.0,
-      );
-    } catch (e) {
-      debugPrint('Error showing toast: $e');
-    }
 
     // Send a notification using the platform channel
     const MethodChannel backgroundChannel =

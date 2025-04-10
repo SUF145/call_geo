@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:vibration/vibration.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+// Removed fluttertoast import as toast notifications are no longer used
 import '../models/user_geofence_settings_model.dart';
 import 'supabase_service.dart';
 
@@ -168,14 +168,7 @@ class GeofenceService {
           Vibration.vibrate(duration: 1000);
         }
 
-        // Show toast
-        Fluttertoast.showToast(
-            msg: "Warning: You've left the restricted area!",
-            toastLength: Toast.LENGTH_LONG,
-            gravity: ToastGravity.CENTER,
-            backgroundColor: Colors.red,
-            textColor: Colors.white,
-            fontSize: 16.0);
+        // Toast notifications have been removed as requested
 
         // Call the exit callback if provided
         onGeofenceExit?.call(position, distanceInMeters);
@@ -184,14 +177,7 @@ class GeofenceService {
       else if (!_wasInsideGeofence && isInsideGeofence) {
         debugPrint('User entered geofence');
 
-        // Show toast
-        Fluttertoast.showToast(
-            msg: "You're back in the allowed area",
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.BOTTOM,
-            backgroundColor: Colors.green,
-            textColor: Colors.white,
-            fontSize: 16.0);
+        // Toast notifications have been removed as requested
 
         // Call the enter callback if provided
         onGeofenceEnter?.call(position);

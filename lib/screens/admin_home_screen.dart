@@ -162,21 +162,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 );
               },
             ),
-            const SizedBox(height: 16),
-            _buildFeatureCard(
-              context,
-              'Geofence Settings',
-              'Configure restricted areas',
-              Icons.fence,
-              Colors.orange,
-              () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const GeofenceScreen(),
-                  ),
-                );
-              },
-            ),
           ],
         ),
       ),
