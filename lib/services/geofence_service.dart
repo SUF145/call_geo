@@ -168,30 +168,12 @@ class GeofenceService {
           Vibration.vibrate(duration: 1000);
         }
 
-        // Show toast
-        Fluttertoast.showToast(
-            msg: "Warning: You've left the restricted area!",
-            toastLength: Toast.LENGTH_LONG,
-            gravity: ToastGravity.CENTER,
-            backgroundColor: Colors.red,
-            textColor: Colors.white,
-            fontSize: 16.0);
-
         // Call the exit callback if provided
         onGeofenceExit?.call(position, distanceInMeters);
       }
       // If user was outside but now inside, trigger enter callback
       else if (!_wasInsideGeofence && isInsideGeofence) {
         debugPrint('User entered geofence');
-
-        // Show toast
-        Fluttertoast.showToast(
-            msg: "You're back in the allowed area",
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.BOTTOM,
-            backgroundColor: Colors.green,
-            textColor: Colors.white,
-            fontSize: 16.0);
 
         // Call the enter callback if provided
         onGeofenceEnter?.call(position);

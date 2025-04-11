@@ -107,61 +107,6 @@ class _LocationSpoofingDemoScreenState extends State<LocationSpoofingDemoScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Spoofing detection status card
-                  Card(
-                    elevation: 4,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Spoofing Detection Status',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          if (_spoofingCheckResult != null) ...[
-                            _buildStatusRow(
-                              'Mock Location Enabled',
-                              _spoofingCheckResult!['mockLocationEnabled'] ?? false,
-                            ),
-                            const SizedBox(height: 8),
-                            _buildStatusRow(
-                              'Spoofing Apps Installed',
-                              _spoofingCheckResult!['spoofingAppsInstalled'] ?? false,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _isSpoofingDetected()
-                                  ? 'Location spoofing detected! Please disable mock locations and remove any spoofing apps.'
-                                  : 'No location spoofing detected.',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: _isSpoofingDetected()
-                                    ? Colors.red
-                                    : Colors.green,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _checkForSpoofing,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.primaryColor,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text('Check Again'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
                   // Enhanced tracking service card
                   Card(
                     elevation: 4,

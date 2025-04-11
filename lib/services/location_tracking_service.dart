@@ -416,22 +416,6 @@ Future<void> _showGeofenceAlert(
       debugPrint('Showing USER notification');
     }
 
-    // Show toast notification
-    // Note: This might not work in the background isolate
-    // We'll rely on the native notification instead
-    try {
-      Fluttertoast.showToast(
-        msg: message,
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.CENTER,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-        fontSize: 16.0,
-      );
-    } catch (e) {
-      debugPrint('Error showing toast: $e');
-    }
-
     // Send a notification using the platform channel
     const MethodChannel backgroundChannel =
         MethodChannel('com.example.call_geo/location_background');
